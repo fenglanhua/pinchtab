@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
@@ -146,8 +147,9 @@ func (b *Bridge) handleText(w http.ResponseWriter, r *http.Request) {
 
 func (b *Bridge) handleNavigate(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		TabID string `json:"tabId"`
-		URL   string `json:"url"`
+		TabID  string `json:"tabId"`
+		URL    string `json:"url"`
+		NewTab bool   `json:"newTab"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
 		jsonErr(w, 400, fmt.Errorf("decode: %w", err))
@@ -155,6 +157,28 @@ func (b *Bridge) handleNavigate(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.URL == "" {
 		jsonResp(w, 400, map[string]string{"error": "url required"})
+		return
+	}
+
+	// If newTab is requested, create a new tab and navigate there
+	if req.NewTab {
+		newTargetID, newCtx, _, err := b.CreateTab(req.URL)
+		if err != nil {
+			jsonErr(w, 500, fmt.Errorf("new tab: %w", err))
+			return
+		}
+
+		tCtx, tCancel := context.WithTimeout(newCtx, navigateTimeout)
+		defer tCancel()
+		go cancelOnClientDone(r.Context(), tCancel)
+
+		var url, title string
+		_ = chromedp.Run(tCtx,
+			chromedp.Location(&url),
+		)
+		title = waitForTitle(tCtx)
+
+		jsonResp(w, 200, map[string]any{"tabId": newTargetID, "url": url, "title": title})
 		return
 	}
 
@@ -177,11 +201,11 @@ func (b *Bridge) handleNavigate(w http.ResponseWriter, r *http.Request) {
 
 	b.DeleteRefCache(resolvedTabID)
 
-	var url, title string
+	var url string
 	_ = chromedp.Run(tCtx,
 		chromedp.Location(&url),
-		chromedp.Title(&title),
 	)
+	title := waitForTitle(tCtx)
 
 	jsonResp(w, 200, map[string]any{"url": url, "title": title})
 }
@@ -348,9 +372,26 @@ func (b *Bridge) handleAction(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	fn, ok := b.actionRegistry()[req.Kind]
+	registry := b.actionRegistry()
+	if req.Kind == "" {
+		kinds := make([]string, 0, len(registry))
+		for k := range registry {
+			kinds = append(kinds, k)
+		}
+		jsonResp(w, 400, map[string]string{
+			"error": fmt.Sprintf("missing required field 'kind' — valid values: %s", strings.Join(kinds, ", ")),
+		})
+		return
+	}
+	fn, ok := registry[req.Kind]
 	if !ok {
-		jsonResp(w, 400, map[string]string{"error": fmt.Sprintf("unknown action: %s", req.Kind)})
+		kinds := make([]string, 0, len(registry))
+		for k := range registry {
+			kinds = append(kinds, k)
+		}
+		jsonResp(w, 400, map[string]string{
+			"error": fmt.Sprintf("unknown action: %s — valid values: %s", req.Kind, strings.Join(kinds, ", ")),
+		})
 		return
 	}
 

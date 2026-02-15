@@ -35,6 +35,20 @@ func navigatePage(ctx context.Context, url string) error {
 	)
 }
 
+// waitForTitle polls document.title for up to 2 seconds, returning the first
+// non-empty value or "" on timeout.
+func waitForTitle(ctx context.Context) string {
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		var title string
+		if err := chromedp.Run(ctx, chromedp.Title(&title)); err == nil && title != "" {
+			return title
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	return ""
+}
+
 // withElement resolves a backendNodeID to a JS remote object, scrolls it into
 // view, and calls the given JS function on it. This is the generic helper for
 // all element-targeted actions (click, hover, select, etc.).
