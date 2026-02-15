@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 )
 
@@ -33,8 +33,7 @@ func corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// cancelOnClientDone cancels the given cancel func when the HTTP request context is done.
-// Use as: go cancelOnClientDone(r.Context(), tCancel)
+// cancelOnClientDone cancels the given cancel func when the HTTP client disconnects.
 func cancelOnClientDone(reqCtx context.Context, cancel context.CancelFunc) {
 	<-reqCtx.Done()
 	cancel()
@@ -44,7 +43,7 @@ func jsonResp(w http.ResponseWriter, code int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	if err := json.NewEncoder(w).Encode(data); err != nil {
-		log.Printf("json encode: %v", err)
+		slog.Error("json encode", "err", err)
 	}
 }
 

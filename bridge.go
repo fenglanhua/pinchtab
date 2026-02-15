@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -18,29 +18,28 @@ type TabEntry struct {
 }
 
 // refCache stores the ref→backendNodeID mapping from the last snapshot per tab.
-// This avoids re-fetching the a11y tree on every action — refs stay stable
-// until the next snapshot call.
+// Refs are assigned during /snapshot and looked up during /action, avoiding
+// a second a11y tree fetch that could drift.
 type refCache struct {
 	refs map[string]int64 // "e0" → backendNodeID
 }
 
-// Bridge is the central state holder for tab contexts and snapshot caches.
+// Bridge is the central state holder for the Chrome connection, tab contexts,
+// and per-tab snapshot caches.
 type Bridge struct {
 	allocCtx   context.Context
-	browserCtx context.Context // persistent browser context
+	browserCtx context.Context
 	tabs       map[string]*TabEntry
-	snapshots  map[string]*refCache // tabID → last snapshot's ref mapping
+	snapshots  map[string]*refCache
 	mu         sync.RWMutex
 }
 
-var bridge Bridge
-
-// tabContext returns the chromedp context for a tab and the resolved tabID.
+// TabContext returns the chromedp context for a tab and the resolved tabID.
 // If tabID is empty, uses the first page target.
-// Uses RLock for reads, upgrades to Lock only when creating a new entry.
-func tabContext(tabID string) (context.Context, string, error) {
+// Uses RLock for cache hits, upgrades to Lock only when creating a new entry.
+func (b *Bridge) TabContext(tabID string) (context.Context, string, error) {
 	if tabID == "" {
-		targets, err := listTargets()
+		targets, err := b.ListTargets()
 		if err != nil {
 			return nil, "", fmt.Errorf("list targets: %w", err)
 		}
@@ -51,22 +50,22 @@ func tabContext(tabID string) (context.Context, string, error) {
 	}
 
 	// Fast path: read lock
-	bridge.mu.RLock()
-	if entry, ok := bridge.tabs[tabID]; ok {
-		bridge.mu.RUnlock()
+	b.mu.RLock()
+	if entry, ok := b.tabs[tabID]; ok {
+		b.mu.RUnlock()
 		return entry.ctx, tabID, nil
 	}
-	bridge.mu.RUnlock()
+	b.mu.RUnlock()
 
 	// Slow path: write lock, double-check
-	bridge.mu.Lock()
-	defer bridge.mu.Unlock()
+	b.mu.Lock()
+	defer b.mu.Unlock()
 
-	if entry, ok := bridge.tabs[tabID]; ok {
+	if entry, ok := b.tabs[tabID]; ok {
 		return entry.ctx, tabID, nil
 	}
 
-	ctx, cancel := chromedp.NewContext(bridge.browserCtx,
+	ctx, cancel := chromedp.NewContext(b.browserCtx,
 		chromedp.WithTargetID(target.ID(tabID)),
 	)
 	if err := chromedp.Run(ctx); err != nil {
@@ -74,13 +73,13 @@ func tabContext(tabID string) (context.Context, string, error) {
 		return nil, "", fmt.Errorf("tab %s not found: %w", tabID, err)
 	}
 
-	bridge.tabs[tabID] = &TabEntry{ctx: ctx, cancel: cancel}
+	b.tabs[tabID] = &TabEntry{ctx: ctx, cancel: cancel}
 	return ctx, tabID, nil
 }
 
-// cleanStaleTabs periodically removes tab entries whose targets no longer exist.
-// Exits when ctx is cancelled.
-func (b *Bridge) cleanStaleTabs(ctx context.Context, interval time.Duration) {
+// CleanStaleTabs periodically removes tab entries whose Chrome targets
+// no longer exist. Exits when ctx is cancelled.
+func (b *Bridge) CleanStaleTabs(ctx context.Context, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -91,7 +90,7 @@ func (b *Bridge) cleanStaleTabs(ctx context.Context, interval time.Duration) {
 		case <-ticker.C:
 		}
 
-		targets, err := listTargets()
+		targets, err := b.ListTargets()
 		if err != nil {
 			continue
 		}
@@ -109,9 +108,31 @@ func (b *Bridge) cleanStaleTabs(ctx context.Context, interval time.Duration) {
 				}
 				delete(b.tabs, id)
 				delete(b.snapshots, id)
-				log.Printf("Cleaned stale tab: %s", id)
+				slog.Info("cleaned stale tab", "id", id)
 			}
 		}
 		b.mu.Unlock()
 	}
+}
+
+// ListTargets returns all open page targets from Chrome.
+func (b *Bridge) ListTargets() ([]*target.Info, error) {
+	var targets []*target.Info
+	if err := chromedp.Run(b.browserCtx,
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			var err error
+			targets, err = target.GetTargets().Do(ctx)
+			return err
+		}),
+	); err != nil {
+		return nil, fmt.Errorf("get targets: %w", err)
+	}
+
+	pages := make([]*target.Info, 0)
+	for _, t := range targets {
+		if t.Type == targetTypePage {
+			pages = append(pages, t)
+		}
+	}
+	return pages, nil
 }

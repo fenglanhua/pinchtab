@@ -34,15 +34,15 @@ Split into 8 files (single package):
 - [x] `middleware.go` (53 lines) — auth, CORS, jsonResp, cancelOnClientDone
 - [x] `main.go` (152 lines) — Chrome launch, routes, signal handling
 
-## P2: Go Idioms & Clean Code
-- [ ] Eliminate global `bridge` var — pass as receiver or inject into handlers
-- [ ] Action registry `map[string]ActionFunc` instead of switch in handleAction
-- [ ] Add `scrollIntoViewIfNeeded` before click/focus actions
-- [ ] Constants for magic strings (`"page"`, `"interactive"`, action kinds)
-- [ ] Use `slog` for structured logging (stdlib since Go 1.21)
-- [ ] Add godoc comments on exported types (Bridge, A11yNode, TabState)
-- [ ] `//go:embed` for stealth JS script
-- [ ] Group Chrome opts by concern (stealth, perf, UI) with comments
+## Done ✅ (P2)
+- [x] Handlers are Bridge methods (receiver pattern, no free functions)
+- [x] Action registry `map[string]ActionFunc` replaces switch in handleAction
+- [x] `scrollIntoViewIfNeeded` before click and type actions
+- [x] Constants for magic strings (targetTypePage, filterInteractive, action/tab kinds)
+- [x] `log/slog` structured logging throughout (replaces `log.Printf`)
+- [x] Godoc comments on all exported types and methods
+- [x] `//go:embed stealth.js` — stealth script in separate file
+- [x] Chrome opts grouped by concern (profile, stealth, perf, UI, identity)
 
 ## P3: Testability
 - [ ] Extract `Browser` interface (navigate, screenshot, evaluate)

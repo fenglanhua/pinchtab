@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -16,8 +16,8 @@ import (
 
 // ── GET /health ────────────────────────────────────────────
 
-func handleHealth(w http.ResponseWriter, r *http.Request) {
-	targets, err := listTargets()
+func (b *Bridge) handleHealth(w http.ResponseWriter, r *http.Request) {
+	targets, err := b.ListTargets()
 	if err != nil {
 		jsonResp(w, 200, map[string]any{"status": "disconnected", "error": err.Error(), "cdp": cdpURL})
 		return
@@ -27,8 +27,8 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 
 // ── GET /tabs ──────────────────────────────────────────────
 
-func handleTabs(w http.ResponseWriter, r *http.Request) {
-	targets, err := listTargets()
+func (b *Bridge) handleTabs(w http.ResponseWriter, r *http.Request) {
+	targets, err := b.ListTargets()
 	if err != nil {
 		jsonErr(w, 500, err)
 		return
@@ -48,7 +48,7 @@ func handleTabs(w http.ResponseWriter, r *http.Request) {
 
 // ── GET /snapshot ──────────────────────────────────────────
 
-func handleSnapshot(w http.ResponseWriter, r *http.Request) {
+func (b *Bridge) handleSnapshot(w http.ResponseWriter, r *http.Request) {
 	tabID := r.URL.Query().Get("tabId")
 	filter := r.URL.Query().Get("filter")
 	maxDepthStr := r.URL.Query().Get("depth")
@@ -59,7 +59,7 @@ func handleSnapshot(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	ctx, resolvedTabID, err := tabContext(tabID)
+	ctx, resolvedTabID, err := b.TabContext(tabID)
 	if err != nil {
 		jsonErr(w, 404, err)
 		return
@@ -88,7 +88,7 @@ func handleSnapshot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build parent map for depth
+	// Build parent map for depth calculation
 	parentMap := make(map[string]string)
 	for _, n := range treeResp.Nodes {
 		for _, childID := range n.ChildIDs {
@@ -132,7 +132,7 @@ func handleSnapshot(w http.ResponseWriter, r *http.Request) {
 		if maxDepth >= 0 && depth > maxDepth {
 			continue
 		}
-		if filter == "interactive" && !interactiveRoles[role] {
+		if filter == filterInteractive && !interactiveRoles[role] {
 			continue
 		}
 
@@ -165,10 +165,10 @@ func handleSnapshot(w http.ResponseWriter, r *http.Request) {
 		refID++
 	}
 
-	// Cache the ref→nodeID mapping for this tab
-	bridge.mu.Lock()
-	bridge.snapshots[resolvedTabID] = &refCache{refs: refs}
-	bridge.mu.Unlock()
+	// Cache ref→nodeID mapping for this tab
+	b.mu.Lock()
+	b.snapshots[resolvedTabID] = &refCache{refs: refs}
+	b.mu.Unlock()
 
 	var url, title string
 	chromedp.Run(tCtx,
@@ -186,10 +186,10 @@ func handleSnapshot(w http.ResponseWriter, r *http.Request) {
 
 // ── GET /screenshot ────────────────────────────────────────
 
-func handleScreenshot(w http.ResponseWriter, r *http.Request) {
+func (b *Bridge) handleScreenshot(w http.ResponseWriter, r *http.Request) {
 	tabID := r.URL.Query().Get("tabId")
 
-	ctx, _, err := tabContext(tabID)
+	ctx, _, err := b.TabContext(tabID)
 	if err != nil {
 		jsonErr(w, 404, err)
 		return
@@ -224,7 +224,7 @@ func handleScreenshot(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("raw") == "true" {
 		w.Header().Set("Content-Type", "image/jpeg")
 		if _, err := w.Write(buf); err != nil {
-			log.Printf("screenshot write: %v", err)
+			slog.Error("screenshot write", "err", err)
 		}
 		return
 	}
@@ -237,10 +237,10 @@ func handleScreenshot(w http.ResponseWriter, r *http.Request) {
 
 // ── GET /text ──────────────────────────────────────────────
 
-func handleText(w http.ResponseWriter, r *http.Request) {
+func (b *Bridge) handleText(w http.ResponseWriter, r *http.Request) {
 	tabID := r.URL.Query().Get("tabId")
 
-	ctx, _, err := tabContext(tabID)
+	ctx, _, err := b.TabContext(tabID)
 	if err != nil {
 		jsonErr(w, 404, err)
 		return
@@ -273,7 +273,7 @@ func handleText(w http.ResponseWriter, r *http.Request) {
 
 // ── POST /navigate ─────────────────────────────────────────
 
-func handleNavigate(w http.ResponseWriter, r *http.Request) {
+func (b *Bridge) handleNavigate(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		TabID string `json:"tabId"`
 		URL   string `json:"url"`
@@ -287,7 +287,7 @@ func handleNavigate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, resolvedTabID, err := tabContext(req.TabID)
+	ctx, resolvedTabID, err := b.TabContext(req.TabID)
 	if err != nil {
 		jsonErr(w, 404, err)
 		return
@@ -302,10 +302,9 @@ func handleNavigate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Invalidate snapshot cache — page changed
-	bridge.mu.Lock()
-	delete(bridge.snapshots, resolvedTabID)
-	bridge.mu.Unlock()
+	b.mu.Lock()
+	delete(b.snapshots, resolvedTabID)
+	b.mu.Unlock()
 
 	var url, title string
 	chromedp.Run(tCtx,
@@ -318,7 +317,65 @@ func handleNavigate(w http.ResponseWriter, r *http.Request) {
 
 // ── POST /action ───────────────────────────────────────────
 
-func handleAction(w http.ResponseWriter, r *http.Request) {
+// ActionFunc handles a single action kind (click, type, etc.).
+type ActionFunc func(ctx context.Context, sel string, nodeID int64, text string) (map[string]any, error)
+
+func (b *Bridge) actionRegistry() map[string]ActionFunc {
+	return map[string]ActionFunc{
+		actionClick: func(ctx context.Context, sel string, nodeID int64, _ string) (map[string]any, error) {
+			if sel != "" {
+				return map[string]any{"clicked": true}, chromedp.Run(ctx, chromedp.Click(sel, chromedp.ByQuery))
+			}
+			if nodeID > 0 {
+				return map[string]any{"clicked": true}, clickByNodeID(ctx, nodeID)
+			}
+			return nil, fmt.Errorf("need selector, ref, or nodeId")
+		},
+		actionType: func(ctx context.Context, sel string, nodeID int64, text string) (map[string]any, error) {
+			if text == "" {
+				return nil, fmt.Errorf("text required for type")
+			}
+			if sel != "" {
+				return map[string]any{"typed": text}, chromedp.Run(ctx,
+					chromedp.Click(sel, chromedp.ByQuery),
+					chromedp.SendKeys(sel, text, chromedp.ByQuery),
+				)
+			}
+			if nodeID > 0 {
+				return map[string]any{"typed": text}, typeByNodeID(ctx, nodeID, text)
+			}
+			return nil, fmt.Errorf("need selector or ref")
+		},
+		actionFill: func(ctx context.Context, sel string, _ int64, text string) (map[string]any, error) {
+			if sel != "" {
+				return map[string]any{"filled": text}, chromedp.Run(ctx, chromedp.SetValue(sel, text, chromedp.ByQuery))
+			}
+			return map[string]any{"filled": text}, nil
+		},
+		actionPress: func(ctx context.Context, _ string, _ int64, key string) (map[string]any, error) {
+			if key == "" {
+				return nil, fmt.Errorf("key required for press")
+			}
+			return map[string]any{"pressed": key}, chromedp.Run(ctx, chromedp.KeyEvent(key))
+		},
+		actionFocus: func(ctx context.Context, sel string, nodeID int64, _ string) (map[string]any, error) {
+			if sel != "" {
+				return map[string]any{"focused": true}, chromedp.Run(ctx, chromedp.Focus(sel, chromedp.ByQuery))
+			}
+			if nodeID > 0 {
+				return map[string]any{"focused": true}, chromedp.Run(ctx,
+					chromedp.ActionFunc(func(ctx context.Context) error {
+						p := map[string]any{"backendNodeId": nodeID}
+						return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.focus", p, nil)
+					}),
+				)
+			}
+			return map[string]any{"focused": true}, nil
+		},
+	}
+}
+
+func (b *Bridge) handleAction(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		TabID    string `json:"tabId"`
 		Kind     string `json:"kind"`
@@ -333,7 +390,7 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, resolvedTabID, err := tabContext(req.TabID)
+	ctx, resolvedTabID, err := b.TabContext(req.TabID)
 	if err != nil {
 		jsonErr(w, 404, err)
 		return
@@ -345,9 +402,9 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 
 	// Resolve ref to backendNodeID from cached snapshot
 	if req.Ref != "" && req.NodeID == 0 && req.Selector == "" {
-		bridge.mu.RLock()
-		cache := bridge.snapshots[resolvedTabID]
-		bridge.mu.RUnlock()
+		b.mu.RLock()
+		cache := b.snapshots[resolvedTabID]
+		b.mu.RUnlock()
 		if cache != nil {
 			if nid, ok := cache.refs[req.Ref]; ok {
 				req.NodeID = nid
@@ -361,77 +418,20 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var sel string
-	if req.Selector != "" {
-		sel = req.Selector
-	}
-
-	var result map[string]any
-
-	switch req.Kind {
-	case "click":
-		if sel != "" {
-			err = chromedp.Run(tCtx, chromedp.Click(sel, chromedp.ByQuery))
-		} else if req.NodeID > 0 {
-			err = clickByNodeID(tCtx, req.NodeID)
-		} else {
-			jsonResp(w, 400, map[string]string{"error": "need selector, ref, or nodeId"})
-			return
-		}
-		result = map[string]any{"clicked": true}
-
-	case "type":
-		if req.Text == "" {
-			jsonResp(w, 400, map[string]string{"error": "text required for type"})
-			return
-		}
-		if sel != "" {
-			err = chromedp.Run(tCtx,
-				chromedp.Click(sel, chromedp.ByQuery),
-				chromedp.SendKeys(sel, req.Text, chromedp.ByQuery),
-			)
-		} else if req.NodeID > 0 {
-			err = typeByNodeID(tCtx, req.NodeID, req.Text)
-		} else {
-			jsonResp(w, 400, map[string]string{"error": "need selector or ref"})
-			return
-		}
-		result = map[string]any{"typed": req.Text}
-
-	case "fill":
-		if sel != "" {
-			err = chromedp.Run(tCtx,
-				chromedp.SetValue(sel, req.Text, chromedp.ByQuery),
-			)
-		}
-		result = map[string]any{"filled": req.Text}
-
-	case "press":
-		if req.Key == "" {
-			jsonResp(w, 400, map[string]string{"error": "key required for press"})
-			return
-		}
-		err = chromedp.Run(tCtx, chromedp.KeyEvent(req.Key))
-		result = map[string]any{"pressed": req.Key}
-
-	case "focus":
-		if sel != "" {
-			err = chromedp.Run(tCtx, chromedp.Focus(sel, chromedp.ByQuery))
-		} else if req.NodeID > 0 {
-			err = chromedp.Run(tCtx,
-				chromedp.ActionFunc(func(ctx context.Context) error {
-					p := map[string]any{"backendNodeId": req.NodeID}
-					return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.focus", p, nil)
-				}),
-			)
-		}
-		result = map[string]any{"focused": true}
-
-	default:
+	registry := b.actionRegistry()
+	fn, ok := registry[req.Kind]
+	if !ok {
 		jsonResp(w, 400, map[string]string{"error": fmt.Sprintf("unknown action: %s", req.Kind)})
 		return
 	}
 
+	// For press, text field carries the key
+	text := req.Text
+	if req.Kind == actionPress {
+		text = req.Key
+	}
+
+	result, err := fn(tCtx, req.Selector, req.NodeID, text)
 	if err != nil {
 		jsonErr(w, 500, fmt.Errorf("action %s: %w", req.Kind, err))
 		return
@@ -442,7 +442,7 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 
 // ── POST /evaluate ─────────────────────────────────────────
 
-func handleEvaluate(w http.ResponseWriter, r *http.Request) {
+func (b *Bridge) handleEvaluate(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		TabID      string `json:"tabId"`
 		Expression string `json:"expression"`
@@ -456,7 +456,7 @@ func handleEvaluate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, _, err := tabContext(req.TabID)
+	ctx, _, err := b.TabContext(req.TabID)
 	if err != nil {
 		jsonErr(w, 404, err)
 		return
@@ -479,9 +479,9 @@ func handleEvaluate(w http.ResponseWriter, r *http.Request) {
 
 // ── POST /tab ──────────────────────────────────────────────
 
-func handleTab(w http.ResponseWriter, r *http.Request) {
+func (b *Bridge) handleTab(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Action string `json:"action"` // "new" or "close"
+		Action string `json:"action"`
 		TabID  string `json:"tabId"`
 		URL    string `json:"url"`
 	}
@@ -491,8 +491,8 @@ func handleTab(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch req.Action {
-	case "new":
-		ctx, cancel := chromedp.NewContext(bridge.browserCtx)
+	case tabActionNew:
+		ctx, cancel := chromedp.NewContext(b.browserCtx)
 
 		url := "about:blank"
 		if req.URL != "" {
@@ -505,31 +505,31 @@ func handleTab(w http.ResponseWriter, r *http.Request) {
 		}
 
 		newTargetID := string(chromedp.FromContext(ctx).Target.TargetID)
-		bridge.mu.Lock()
-		bridge.tabs[newTargetID] = &TabEntry{ctx: ctx, cancel: cancel}
-		bridge.mu.Unlock()
+		b.mu.Lock()
+		b.tabs[newTargetID] = &TabEntry{ctx: ctx, cancel: cancel}
+		b.mu.Unlock()
 
 		var curURL, title string
 		chromedp.Run(ctx, chromedp.Location(&curURL), chromedp.Title(&title))
 		jsonResp(w, 200, map[string]any{"tabId": newTargetID, "url": curURL, "title": title})
 
-	case "close":
+	case tabActionClose:
 		if req.TabID == "" {
 			jsonResp(w, 400, map[string]string{"error": "tabId required"})
 			return
 		}
 
-		bridge.mu.Lock()
-		if entry, ok := bridge.tabs[req.TabID]; ok {
+		b.mu.Lock()
+		if entry, ok := b.tabs[req.TabID]; ok {
 			if entry.cancel != nil {
 				entry.cancel()
 			}
-			delete(bridge.tabs, req.TabID)
-			delete(bridge.snapshots, req.TabID)
+			delete(b.tabs, req.TabID)
+			delete(b.snapshots, req.TabID)
 		}
-		bridge.mu.Unlock()
+		b.mu.Unlock()
 
-		ctx, cancel := chromedp.NewContext(bridge.browserCtx,
+		ctx, cancel := chromedp.NewContext(b.browserCtx,
 			chromedp.WithTargetID(target.ID(req.TabID)),
 		)
 		defer cancel()

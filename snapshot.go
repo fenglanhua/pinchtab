@@ -6,6 +6,7 @@ import (
 )
 
 // A11yNode is a flattened accessibility tree node returned by /snapshot.
+// Refs (e0, e1, ...) are stable within a snapshot and cached for use by /action.
 type A11yNode struct {
 	Ref      string `json:"ref"`
 	Role     string `json:"role"`
@@ -14,10 +15,11 @@ type A11yNode struct {
 	Value    string `json:"value,omitempty"`
 	Disabled bool   `json:"disabled,omitempty"`
 	Focused  bool   `json:"focused,omitempty"`
-	NodeID   int64  `json:"nodeId,omitempty"` // backend DOM node ID for action resolution
+	NodeID   int64  `json:"nodeId,omitempty"`
 }
 
-// ── Raw a11y tree types (to avoid cdproto deserialization issues) ──
+// Raw a11y tree types — we parse CDP responses manually because the typed
+// cdproto library crashes on the "uninteresting" PropertyName value.
 
 type rawAXNode struct {
 	NodeID           string      `json:"nodeId"`
@@ -51,6 +53,8 @@ func (v *rawAXValue) String() string {
 	return strings.Trim(string(v.Value), `"`)
 }
 
+// interactiveRoles is the set of ARIA roles considered interactive
+// for the ?filter=interactive snapshot parameter.
 var interactiveRoles = map[string]bool{
 	"button": true, "link": true, "textbox": true, "searchbox": true,
 	"combobox": true, "listbox": true, "option": true, "checkbox": true,

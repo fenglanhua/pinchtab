@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -36,15 +36,16 @@ func markCleanExit() {
 	patched = strings.ReplaceAll(patched, `"exited_cleanly":false`, `"exited_cleanly":true`)
 	if patched != string(data) {
 		if err := os.WriteFile(prefsPath, []byte(patched), 0644); err != nil {
-			log.Printf("Failed to patch prefs: %v", err)
+			slog.Error("patch prefs", "err", err)
 		}
 	}
 }
 
-func saveState() {
-	targets, err := listTargets()
+// SaveState writes all open tab URLs to sessions.json.
+func (b *Bridge) SaveState() {
+	targets, err := b.ListTargets()
 	if err != nil {
-		log.Printf("Failed to save state: %v", err)
+		slog.Error("save state: list targets", "err", err)
 		return
 	}
 
@@ -66,18 +67,19 @@ func saveState() {
 
 	data, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
-		log.Printf("Failed to marshal state: %v", err)
+		slog.Error("save state: marshal", "err", err)
 		return
 	}
 	path := filepath.Join(stateDir, "sessions.json")
 	if err := os.WriteFile(path, data, 0644); err != nil {
-		log.Printf("Failed to write state: %v", err)
+		slog.Error("save state: write", "err", err)
 	} else {
-		log.Printf("Saved %d tabs to %s", len(tabs), path)
+		slog.Info("saved tabs", "count", len(tabs), "path", path)
 	}
 }
 
-func restoreState() {
+// RestoreState reopens tabs from the last saved session.
+func (b *Bridge) RestoreState() {
 	path := filepath.Join(stateDir, "sessions.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -93,20 +95,20 @@ func restoreState() {
 		if strings.Contains(tab.URL, "/sorry/") || strings.Contains(tab.URL, "about:blank") {
 			continue
 		}
-		ctx, cancel := chromedp.NewContext(bridge.browserCtx)
+		ctx, cancel := chromedp.NewContext(b.browserCtx)
 		tCtx, tCancel := context.WithTimeout(ctx, 10*time.Second)
 		if err := chromedp.Run(tCtx, chromedp.Navigate(tab.URL)); err != nil {
 			tCancel()
 			cancel()
-			log.Printf("Failed to restore tab %s: %v", tab.URL, err)
+			slog.Warn("restore tab failed", "url", tab.URL, "err", err)
 			continue
 		}
 		tCancel()
 		newID := string(chromedp.FromContext(ctx).Target.TargetID)
-		bridge.tabs[newID] = &TabEntry{ctx: ctx, cancel: cancel}
+		b.tabs[newID] = &TabEntry{ctx: ctx, cancel: cancel}
 		restored++
 	}
 	if restored > 0 {
-		log.Printf("Restored %d tabs from previous session", restored)
+		slog.Info("restored tabs", "count", restored)
 	}
 }

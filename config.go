@@ -1,12 +1,38 @@
 package main
 
 import (
+	_ "embed"
 	"os"
 	"path/filepath"
 	"time"
 )
 
+// Body size limit for POST handlers.
 const maxBodySize = 1 << 20 // 1MB
+
+// Target type for Chrome DevTools Protocol.
+const targetTypePage = "page"
+
+// Snapshot filter values.
+const filterInteractive = "interactive"
+
+// Action kinds for /action endpoint.
+const (
+	actionClick = "click"
+	actionType  = "type"
+	actionFill  = "fill"
+	actionPress = "press"
+	actionFocus = "focus"
+)
+
+// Tab actions for /tab endpoint.
+const (
+	tabActionNew   = "new"
+	tabActionClose = "close"
+)
+
+//go:embed stealth.js
+var stealthScript string
 
 var (
 	port            = envOr("BRIDGE_PORT", "18800")
