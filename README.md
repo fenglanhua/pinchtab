@@ -78,10 +78,12 @@ Pinchtab launches its own Chrome with a persistent profile at `~/.pinchtab/chrom
 
 - 🌲 **Accessibility-first** — structured tree with stable refs (`e0`, `e1`...) for click, type, read
 - 🎯 **Smart filters** — `?filter=interactive` returns only buttons/links/inputs (~75% fewer tokens)
-- 🖱️ **Direct actions** — click, type, fill, press, focus by ref or CSS selector
+- 🖱️ **Direct actions** — click, type, fill, press, focus, hover, select, scroll by ref or CSS selector
 - 🕵️ **Stealth mode** — patches `navigator.webdriver`, spoofs UA, hides automation flags
 - 💾 **Session persistence** — cookies, auth, tabs survive restarts
-- 📝 **Text extraction** — raw `innerText` for minimal token cost
+- 📝 **Text extraction** — readability mode (strips nav/ads) or raw `innerText`
+- 🔄 **Smart diff** — `?diff=true` returns only changes since last snapshot
+- 📄 **Text format** — `?format=text` for indented tree (~40-60% fewer tokens than JSON)
 - ⚡ **JS evaluation** — escape hatch for anything the API doesn't cover
 - 📸 **Screenshots** — JPEG with quality control for visual verification
 
@@ -93,9 +95,9 @@ Pinchtab launches its own Chrome with a persistent profile at `~/.pinchtab/chrom
 | `GET` | `/tabs` | List open tabs |
 | `GET` | `/snapshot` | Accessibility tree (primary interface) |
 | `GET` | `/screenshot` | JPEG screenshot (opt-in) |
-| `GET` | `/text` | Readable page text |
+| `GET` | `/text` | Readable page text (readability or raw) |
 | `POST` | `/navigate` | Go to URL |
-| `POST` | `/action` | Click, type, fill, press, focus |
+| `POST` | `/action` | Click, type, fill, press, focus, hover, select, scroll |
 | `POST` | `/evaluate` | Execute JavaScript |
 | `POST` | `/tab` | Open/close tabs |
 
@@ -105,6 +107,14 @@ Pinchtab launches its own Chrome with a persistent profile at `~/.pinchtab/chrom
 | `tabId` | Target tab (default: first tab) |
 | `filter=interactive` | Only buttons, links, inputs |
 | `depth=N` | Max tree depth |
+| `diff=true` | Return only added/changed/removed nodes since last snapshot |
+| `format=text` | Indented plain text instead of JSON (~40-60% fewer tokens) |
+
+### Query Parameters (text)
+| Param | Description |
+|-------|-------------|
+| `tabId` | Target tab (default: first tab) |
+| `mode=raw` | Raw `innerText` instead of readability extraction |
 
 ## Configuration
 
@@ -181,17 +191,17 @@ Everything else is Go standard library.
 
 ## Requirements
 
-- **Go 1.21+** (build from source) or download a [prebuilt binary](https://github.com/pinchtab/pinchtab/releases)
+- **Go 1.24+** (build from source) or download a [prebuilt binary](https://github.com/luigi-agosti/pinchtab/releases)
 - **Google Chrome** or Chromium installed
 
 ## Install
 
 ```bash
 # From source
-go install github.com/pinchtab/pinchtab@latest
+go install github.com/luigi-agosti/pinchtab@latest
 
 # Or clone and build
-git clone https://github.com/pinchtab/pinchtab.git
+git clone https://github.com/luigi-agosti/pinchtab.git
 cd pinchtab
 go build -o pinchtab .
 ```
@@ -199,12 +209,12 @@ go build -o pinchtab .
 ## Development
 
 ```bash
-git clone https://github.com/pinchtab/pinchtab.git
+git clone https://github.com/luigi-agosti/pinchtab.git
 cd pinchtab
 go build -o pinchtab .
 ./pinchtab
 
-# Run tests (coming soon)
+# Run tests (38 tests)
 go test ./...
 ```
 

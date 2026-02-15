@@ -31,10 +31,10 @@ BRIDGE_HEADLESS=true pinchtab &
 pinchtab &
 ```
 
-Default port: `18800`. Override with `BRIDGE_PORT=18801`.
+Default port: `9867`. Override with `BRIDGE_PORT=9868`.
 Auth: set `BRIDGE_TOKEN=<secret>` and pass `Authorization: Bearer <secret>`.
 
-Base URL for all examples: `http://localhost:18800`
+Base URL for all examples: `http://localhost:9867`
 
 ## Core Workflow
 
@@ -52,7 +52,7 @@ Refs (e.g. `e0`, `e5`, `e12`) are cached per tab after each snapshot — no need
 ### Navigate
 
 ```bash
-curl -X POST http://localhost:18800/navigate \
+curl -X POST http://localhost:9867/navigate \
   -H 'Content-Type: application/json' \
   -d '{"url": "https://example.com"}'
 ```
@@ -61,55 +61,90 @@ curl -X POST http://localhost:18800/navigate \
 
 ```bash
 # Full tree
-curl http://localhost:18800/snapshot
+curl http://localhost:9867/snapshot
 
 # Interactive elements only (buttons, links, inputs) — much smaller
-curl "http://localhost:18800/snapshot?filter=interactive"
+curl "http://localhost:9867/snapshot?filter=interactive"
 
 # Limit depth
-curl "http://localhost:18800/snapshot?depth=5"
+curl "http://localhost:9867/snapshot?depth=5"
+
+# Smart diff — only changes since last snapshot (massive token savings)
+curl "http://localhost:9867/snapshot?diff=true"
+
+# Text format — indented tree, ~40-60% fewer tokens than JSON
+curl "http://localhost:9867/snapshot?format=text"
 ```
 
 Returns flat JSON array of nodes with `ref`, `role`, `name`, `depth`, `value`, `nodeId`.
 
-**Token optimization**: Use `?filter=interactive` for action-oriented tasks (~75% fewer tokens). Use full snapshot only when you need to read page content.
+**Token optimization**: Use `?filter=interactive` for action-oriented tasks (~75% fewer tokens). Use `?diff=true` on multi-step workflows to see only what changed. Use `?format=text` for cheapest structured output. Use full snapshot only when you need complete page understanding.
 
 ### Act on elements
 
 ```bash
 # Click by ref
-curl -X POST http://localhost:18800/action \
+curl -X POST http://localhost:9867/action \
   -H 'Content-Type: application/json' \
   -d '{"kind": "click", "ref": "e5"}'
 
 # Type into focused element (click first, then type)
-curl -X POST http://localhost:18800/action \
+curl -X POST http://localhost:9867/action \
   -H 'Content-Type: application/json' \
   -d '{"kind": "click", "ref": "e12"}'
-curl -X POST http://localhost:18800/action \
+curl -X POST http://localhost:9867/action \
   -H 'Content-Type: application/json' \
   -d '{"kind": "type", "ref": "e12", "text": "hello world"}'
 
 # Press a key
-curl -X POST http://localhost:18800/action \
+curl -X POST http://localhost:9867/action \
   -H 'Content-Type: application/json' \
   -d '{"kind": "press", "key": "Enter"}'
 
 # Focus an element
-curl -X POST http://localhost:18800/action \
+curl -X POST http://localhost:9867/action \
   -H 'Content-Type: application/json' \
   -d '{"kind": "focus", "ref": "e3"}'
 
 # Fill (set value directly, no keystrokes)
-curl -X POST http://localhost:18800/action \
+curl -X POST http://localhost:9867/action \
   -H 'Content-Type: application/json' \
   -d '{"kind": "fill", "selector": "#email", "text": "user@example.com"}'
+
+# Hover (trigger dropdowns/tooltips)
+curl -X POST http://localhost:9867/action \
+  -H 'Content-Type: application/json' \
+  -d '{"kind": "hover", "ref": "e8"}'
+
+# Select dropdown option (by value or visible text)
+curl -X POST http://localhost:9867/action \
+  -H 'Content-Type: application/json' \
+  -d '{"kind": "select", "ref": "e10", "value": "option2"}'
+
+# Scroll to element
+curl -X POST http://localhost:9867/action \
+  -H 'Content-Type: application/json' \
+  -d '{"kind": "scroll", "ref": "e20"}'
+
+# Scroll by pixels (infinite scroll pages)
+curl -X POST http://localhost:9867/action \
+  -H 'Content-Type: application/json' \
+  -d '{"kind": "scroll", "scrollY": 800}'
+
+# Click and wait for navigation (link clicks)
+curl -X POST http://localhost:9867/action \
+  -H 'Content-Type: application/json' \
+  -d '{"kind": "click", "ref": "e5", "waitNav": true}'
 ```
 
 ### Extract text
 
 ```bash
-curl http://localhost:18800/text
+# Readability mode (default) — strips nav/footer/ads, keeps article/main content
+curl http://localhost:9867/text
+
+# Raw innerText (old behavior)
+curl "http://localhost:9867/text?mode=raw"
 ```
 
 Returns `{url, title, text}`. Cheapest option (~1K tokens for most pages).
@@ -118,16 +153,16 @@ Returns `{url, title, text}`. Cheapest option (~1K tokens for most pages).
 
 ```bash
 # Raw JPEG bytes
-curl "http://localhost:18800/screenshot?raw=true" -o screenshot.jpg
+curl "http://localhost:9867/screenshot?raw=true" -o screenshot.jpg
 
 # With quality setting (default 80)
-curl "http://localhost:18800/screenshot?raw=true&quality=50" -o screenshot.jpg
+curl "http://localhost:9867/screenshot?raw=true&quality=50" -o screenshot.jpg
 ```
 
 ### Evaluate JavaScript
 
 ```bash
-curl -X POST http://localhost:18800/evaluate \
+curl -X POST http://localhost:9867/evaluate \
   -H 'Content-Type: application/json' \
   -d '{"expression": "document.title"}'
 ```
@@ -136,15 +171,15 @@ curl -X POST http://localhost:18800/evaluate \
 
 ```bash
 # List tabs
-curl http://localhost:18800/tabs
+curl http://localhost:9867/tabs
 
 # Open new tab
-curl -X POST http://localhost:18800/tab \
+curl -X POST http://localhost:9867/tab \
   -H 'Content-Type: application/json' \
   -d '{"action": "new", "url": "https://example.com"}'
 
 # Close tab
-curl -X POST http://localhost:18800/tab \
+curl -X POST http://localhost:9867/tab \
   -H 'Content-Type: application/json' \
   -d '{"action": "close", "tabId": "TARGET_ID"}'
 ```
@@ -154,28 +189,31 @@ Multi-tab: pass `?tabId=TARGET_ID` to snapshot/screenshot/text, or `"tabId"` in 
 ### Health check
 
 ```bash
-curl http://localhost:18800/health
+curl http://localhost:9867/health
 ```
 
 ## Token Cost Guide
 
 | Method | Typical tokens | When to use |
 |---|---|---|
-| `/text` | ~1K | Reading page content |
-| `/snapshot?filter=interactive` | ~5K | Finding buttons/links to click |
-| `/snapshot` | ~20K | Full page understanding |
+| `/text` | ~800 | Reading page content |
+| `/snapshot?filter=interactive` | ~3,600 | Finding buttons/links to click |
+| `/snapshot?diff=true` | varies | Multi-step workflows (only changes) |
+| `/snapshot?format=text` | ~40-60% less | Structured tree, cheaper than JSON |
+| `/snapshot` | ~10,500 | Full page understanding |
 | `/screenshot` | ~2K (vision) | Visual verification |
 
-**Strategy**: Start with `/snapshot?filter=interactive`. Use full `/snapshot` only when you need to read static text or understand layout. Use `/text` when you only need the readable content.
+**Strategy**: Start with `/snapshot?filter=interactive`. Use `?diff=true` on subsequent snapshots in multi-step tasks. Use `/text` when you only need the readable content. Use `?format=text` to cut token costs further. Use full `/snapshot` only for complete page understanding.
 
 ## Environment Variables
 
 | Var | Default | Description |
 |---|---|---|
-| `BRIDGE_PORT` | `18800` | HTTP port |
+| `BRIDGE_PORT` | `9867` | HTTP port |
 | `BRIDGE_HEADLESS` | `false` | Run Chrome headless |
 | `BRIDGE_TOKEN` | (none) | Bearer auth token |
-| `BRIDGE_PROFILE` | `~/.browser-bridge/chrome-profile` | Chrome profile dir |
+| `BRIDGE_PROFILE` | `~/.pinchtab/chrome-profile` | Chrome profile dir |
+| `BRIDGE_STATE_DIR` | `~/.pinchtab` | State/session storage |
 | `BRIDGE_NO_RESTORE` | `false` | Skip tab restore on startup |
 | `CDP_URL` | (none) | Connect to existing Chrome DevTools |
 
