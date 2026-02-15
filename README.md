@@ -154,6 +154,7 @@ All via environment variables:
 | `BRIDGE_HEADLESS` | `false` | Run Chrome headless |
 | `BRIDGE_PROFILE` | `~/.browser-bridge/chrome-profile` | Chrome profile directory |
 | `BRIDGE_STATE_DIR` | `~/.browser-bridge` | State/session storage |
+| `BRIDGE_NO_RESTORE` | `false` | Skip restoring tabs from previous session |
 | `CDP_URL` | *(none)* | Connect to existing Chrome instead of launching |
 
 ## Architecture

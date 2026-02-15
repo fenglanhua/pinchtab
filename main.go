@@ -28,6 +28,7 @@ var (
 	token      = os.Getenv("BRIDGE_TOKEN")
 	stateDir   = envOr("BRIDGE_STATE_DIR", filepath.Join(homeDir(), ".browser-bridge"))
 	headless   = os.Getenv("BRIDGE_HEADLESS") == "true"
+	noRestore  = os.Getenv("BRIDGE_NO_RESTORE") == "true"
 	profileDir = envOr("BRIDGE_PROFILE", filepath.Join(homeDir(), ".browser-bridge", "chrome-profile"))
 	actionTimeout = 15 * time.Second
 )
@@ -108,6 +109,9 @@ func main() {
 			chromedp.Flag("disable-popup-blocking", true),
 			chromedp.Flag("disable-default-apps", false),
 			chromedp.Flag("no-first-run", true),
+			// Suppress "didn't shut down correctly" restore bar
+			chromedp.Flag("disable-session-crashed-bubble", true),
+			chromedp.Flag("hide-crash-restore-bubble", true),
 
 			chromedp.UserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"),
 			chromedp.WindowSize(1440, 900),
@@ -118,6 +122,9 @@ func main() {
 		} else {
 			opts = append(opts, chromedp.Flag("headless", false))
 		}
+
+		// Patch prefs before launch to suppress crash bar
+		markCleanExit()
 
 		bridge.allocCtx, allocCancel = chromedp.NewExecAllocator(context.Background(), opts...)
 	}
@@ -160,8 +167,10 @@ func main() {
 	bridge.tabs[string(initTargetID)] = &TabEntry{ctx: browserCtx}
 	log.Printf("Initial tab: %s", initTargetID)
 
-	// Restore tabs from last session
-	restoreState()
+	// Restore tabs from last session (skip with BRIDGE_NO_RESTORE=true)
+	if !noRestore {
+		restoreState()
+	}
 
 	// Start background tab cleanup
 	go bridge.cleanStaleTabs(30 * time.Second)
@@ -186,6 +195,7 @@ func main() {
 		<-sig
 		log.Println("Shutting down, saving state...")
 		saveState()
+		markCleanExit()
 		srv.Shutdown(context.Background())
 	}()
 
@@ -898,6 +908,21 @@ func listTargets() ([]*target.Info, error) {
 }
 
 // ── Session persistence ────────────────────────────────────
+
+// markCleanExit patches Chrome's preferences to prevent "didn't shut down correctly" bar
+func markCleanExit() {
+	prefsPath := filepath.Join(profileDir, "Default", "Preferences")
+	data, err := os.ReadFile(prefsPath)
+	if err != nil {
+		return
+	}
+	// Replace "exit_type":"Crashed" with "exit_type":"Normal"
+	patched := strings.ReplaceAll(string(data), `"exit_type":"Crashed"`, `"exit_type":"Normal"`)
+	patched = strings.ReplaceAll(patched, `"exited_cleanly":false`, `"exited_cleanly":true`)
+	if patched != string(data) {
+		os.WriteFile(prefsPath, []byte(patched), 0644)
+	}
+}
 
 func saveState() {
 	targets, err := listTargets()
