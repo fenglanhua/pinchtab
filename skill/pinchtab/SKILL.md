@@ -13,6 +13,17 @@ metadata:
     emoji: "🦀"
     requires:
       bins: ["pinchtab"]
+      env:
+        - name: BRIDGE_TOKEN
+          secret: true
+          optional: true
+          description: "Bearer auth token for Pinchtab API"
+        - name: BRIDGE_PORT
+          optional: true
+          description: "HTTP port (default: 18800)"
+        - name: BRIDGE_HEADLESS
+          optional: true
+          description: "Run Chrome headless (true/false)"
 ---
 
 # Pinchtab
