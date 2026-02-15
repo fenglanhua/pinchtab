@@ -1,0 +1,69 @@
+# Contributing to Pinchtab
+
+## Setup
+
+```bash
+git clone https://github.com/pinchtab/pinchtab.git
+cd pinchtab
+
+# Build
+go build -o pinchtab .
+
+# Run (headed — Chrome window opens)
+./pinchtab
+
+# Run headless
+BRIDGE_HEADLESS=true ./pinchtab
+
+# Enable pre-commit hook
+git config core.hooksPath .githooks
+```
+
+Requires **Go 1.24+** and **Google Chrome**.
+
+## Development Workflow
+
+1. Make your changes
+2. Format: `gofmt -w .`
+3. Test: `go test ./... -count=1`
+4. Lint: `golangci-lint run ./...` (v2.9.0+)
+5. Commit — pre-commit hook runs checks automatically
+6. Push: `git pull --rebase && git push`
+
+## Running Tests
+
+```bash
+# All tests
+go test ./... -count=1 -v
+
+# With coverage
+go test ./... -coverprofile=coverage.out
+go tool cover -func=coverage.out
+```
+
+Tests don't require a running Chrome instance.
+
+## Project Layout
+
+Single Go package, all files in root:
+
+- `main.go` — entry point, Chrome launch, routes
+- `handlers.go` — HTTP handlers
+- `snapshot.go` — accessibility tree parsing
+- `cdp.go` — Chrome DevTools Protocol helpers
+- `bridge.go` — tab management
+- `config.go` — environment config
+- `state.go` — session persistence
+- `middleware.go` — auth, CORS
+
+## Style
+
+- `gofmt` enforced (CI + pre-commit)
+- Handle all error returns
+- Lowercase error strings, wrap with `%w`
+- Tests next to source (`foo.go` → `foo_test.go`)
+- No new dependencies without good reason
+
+## For AI Agents
+
+See [AGENTS.md](AGENTS.md) for detailed conventions and patterns.
