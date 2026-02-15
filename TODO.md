@@ -68,6 +68,9 @@ Split into 8 files (single package):
 - [ ] **Wait for navigation** — after click, wait for page load before returning
 - [ ] **Better /text** — Readability-style extraction instead of raw innerText
 - [ ] **Split handlers.go** — snapshot handler is complex enough for its own file
+- [ ] **Wire interfaces into handlers** — Inject Browser/TabManager so handler tests don't need Chrome
+- [ ] **`hover` action** — mouseover for dropdowns/tooltips (common on X, Google)
+- [ ] **`select` action** — pick option from `<select>` dropdowns by value or text
 
 ## P6: Nice to Have
 - [ ] **File-based output** — `?output=file` saves snapshot to disk, returns path (Playwright CLI approach)
@@ -76,6 +79,8 @@ Split into 8 files (single package):
 - [ ] **Docker image** — `docker run pinchtab` with bundled Chromium
 - [ ] **Config file** — `~/.pinchtab/config.json`
 - [ ] **LaunchAgent/systemd** — auto-start on boot
+- [ ] **`/cookies` endpoint** — read/set cookies (useful for auth debugging)
+- [ ] **Snapshot text format** — `?format=text` returns indented tree instead of JSON (even cheaper tokens)
 
 ## Not Doing
 - Plugin system
