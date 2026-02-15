@@ -217,4 +217,4 @@ Pinchtab is built to work seamlessly with [OpenClaw](https://openclaw.ai) — th
 
 ## License
 
-MIT — [Giago Software Ltd](https://giago.co)
+MIT — Luigi Agosti
