@@ -206,6 +206,14 @@ Playwright MCP, OpenClaw, and Browser Use all default to accessibility trees for
 
 Everything else is Go standard library.
 
+## Works with OpenClaw
+
+<p align="center">
+  <img src="assets/works-with-openclaw.png" alt="Works with OpenClaw" width="400"/>
+</p>
+
+Pinchtab is built to work seamlessly with [OpenClaw](https://openclaw.ai) — the open-source personal AI assistant. Use Pinchtab as your agent's browser backend for faster, cheaper web automation.
+
 ## License
 
 MIT — [Giago Software Ltd](https://giago.co)
