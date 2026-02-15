@@ -44,19 +44,27 @@ Split into 8 files (single package):
 - [x] `//go:embed stealth.js` — stealth script in separate file
 - [x] Chrome opts grouped by concern (profile, stealth, perf, UI, identity)
 
-## P3: Testability
+## P3: Bugs & Robustness
+- [ ] **Navigate uses `page.Navigate` + DOMContentLoaded** — `chromedp.Navigate` waits for full load event which never fires on SPAs (X, Gmail). Root cause of session restore hangs.
+- [ ] **Request logging middleware** — log method/path/status/duration with slog
+- [ ] **Default port conflict** — 18800 conflicts with OpenClaw's `openclaw` profile. Change default or document.
+- [ ] **Clean up ActionFunc signature** — `press` awkwardly uses text param for key. Unify or pass full request struct.
+
+## P4: Testability
 - [ ] Extract `Browser` interface (navigate, screenshot, evaluate)
 - [ ] Extract `TabManager` interface (get, create, close, list)
 - [ ] Add handler tests using `httptest` + mock interfaces
 - [ ] Add snapshot unit tests — a11y tree filtering/parsing
 
-## P4: Features
+## P5: Features
+- [ ] **`/scroll` endpoint** — scroll to element or by amount. Needed for infinite-scroll pages (X, Reddit).
+- [ ] **`withElement` helper** — generic `withElement(ctx, nodeID, jsFunc)` for all element actions (click, type, scroll, hover, drag)
 - [ ] **Smart diff** — `?diff=true` returns only changes since last snapshot. Massive token savings on multi-step tasks
-- [ ] **Scroll actions** — scroll to element, scroll by amount
 - [ ] **Wait for navigation** — after click, wait for page load before returning
 - [ ] **Better /text** — Readability-style extraction instead of raw innerText
+- [ ] **Split handlers.go** — snapshot handler is complex enough for its own file
 
-## P5: Nice to Have
+## P6: Nice to Have
 - [ ] **File-based output** — `?output=file` saves snapshot to disk, returns path (Playwright CLI approach)
 - [ ] **Compact format** — YAML or indented text instead of JSON
 - [ ] **Action chaining** — `POST /actions` batch multiple actions in one call
