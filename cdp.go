@@ -31,7 +31,7 @@ func navigatePage(ctx context.Context, url string) error {
 		}),
 		// Brief sleep to let the page start rendering — not a full load wait.
 		// Agents should use /snapshot to confirm readiness.
-		chromedp.Sleep(500 * time.Millisecond),
+		chromedp.Sleep(500*time.Millisecond),
 	)
 }
 
