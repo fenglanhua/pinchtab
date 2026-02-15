@@ -49,6 +49,14 @@ curl -X POST localhost:18800/action -d '{"kind":"click","ref":"e5"}'
 
 ## Quick Start
 
+### With your AI agent
+
+> Install Pinchtab and set it up for browser automation.
+
+Your agent can clone, build, and configure Pinchtab using the [OpenClaw skill](skill/pinchtab/SKILL.md). Just ask.
+
+### Manual
+
 ```bash
 # Build
 go build -o pinchtab .
@@ -177,14 +185,6 @@ Everything else is Go standard library.
 - **Google Chrome** or Chromium installed
 
 ## Install
-
-### With your AI agent
-
-> Install Pinchtab and set it up for browser automation.
-
-Your agent can clone, build, and configure Pinchtab using the [OpenClaw skill](skill/pinchtab/SKILL.md). Just ask.
-
-### Manual
 
 ```bash
 # From source
