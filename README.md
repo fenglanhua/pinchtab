@@ -280,15 +280,11 @@ go test ./...
 
 ### Agents
 
-<a href="https://github.com/luigiagent">
-  <img src="https://github.com/luigiagent.png" width="60" style="border-radius:50%" alt="Bosch"/><br/>
-  <sub><b>Bosch</b> · OpenClaw · Claude</sub>
-</a>
-&nbsp;&nbsp;
-<a href="https://github.com/luigiagent">
-  <img src="https://github.com/luigiagent.png" width="60" style="border-radius:50%" alt="Mario"/><br/>
-  <sub><b>Mario</b> · OpenClaw · Claude</sub>
-</a>
+| | |
+|:---:|:---:|
+| <a href="https://github.com/luigiagent"><img src="https://github.com/luigiagent.png" width="60"/></a> | <a href="https://github.com/luigiagent"><img src="https://github.com/luigiagent.png" width="60"/></a> |
+| **Bosch** | **Mario** |
+| OpenClaw · Claude | OpenClaw · Claude |
 
 ## Works with OpenClaw
 
