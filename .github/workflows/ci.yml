@@ -82,3 +82,32 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-skill:
+    name: Publish Skill to ClawHub
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, lint]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install ClawHub CLI
+        run: npm i -g clawhub
+
+      - name: Publish skill
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          clawhub publish skill/pinchtab \
+            --slug pinchtab \
+            --name "Pinchtab" \
+            --version "$VERSION" \
+            --changelog "Release $GITHUB_REF_NAME" \
+            --tags latest \
+            --token "$CLAWHUB_TOKEN" \
+            --no-input
+        env:
+          CLAWHUB_TOKEN: ${{ secrets.CLAWHUB_TOKEN }}
