@@ -31,16 +31,15 @@ curl localhost:18800/text?tabId=X
 curl -X POST localhost:18800/action -d '{"kind":"click","ref":"e5"}'
 ```
 
-| | Pinchtab | OpenClaw Browser | Playwright MCP | Steel Browser |
-|---|---|---|---|---|
-| Interface | HTTP | Internal | MCP | HTTP |
-| Works with any agent | ✅ | ❌ | ❌ | ✅ |
-| A11y snapshots | ✅ | ✅ | ✅ | ❌ |
-| Element interaction | ✅ | ✅ | ✅ | ❌ |
-| Stealth mode | ✅ | ❌ | ❌ | ✅ |
-| Session persistence | ✅ | ❌ | ❌ | ✅ |
-| Self-contained binary | ✅ 12MB | ❌ | ❌ | ❌ |
-| Lines of code | ~600 | — | ~5,000 | ~12,000 |
+| | Pinchtab | OpenClaw Browser |
+|---|---|---|
+| **Tokens per page** | **~800** (`/text`) / ~3,600 (interactive) | ~10,000+ (full snapshot) |
+| Interface | HTTP — any agent, any language | Internal only |
+| A11y snapshots | ✅ | ✅ |
+| Element interaction | ✅ | ✅ |
+| Stealth mode | ✅ | ❌ |
+| Session persistence | ✅ | ❌ |
+| Self-contained binary | ✅ 12MB | ❌ |
 
 - **5-13x cheaper** than screenshots or full snapshots for read-heavy tasks ([real measurements](#token-efficiency--real-numbers))
 - **Plain HTTP API** — not locked to any agent framework
