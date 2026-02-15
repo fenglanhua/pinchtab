@@ -94,7 +94,8 @@ func main() {
 	slog.Info("initial tab", "id", string(initTargetID))
 
 	if !noRestore {
-		bridge.RestoreState()
+		// Restore in background so it doesn't block the HTTP server
+		go bridge.RestoreState()
 	}
 
 	// Background tab cleanup
@@ -114,7 +115,7 @@ func main() {
 	mux.HandleFunc("POST /evaluate", bridge.handleEvaluate)
 	mux.HandleFunc("POST /tab", bridge.handleTab)
 
-	srv := &http.Server{Addr: ":" + port, Handler: corsMiddleware(authMiddleware(mux))}
+	srv := &http.Server{Addr: ":" + port, Handler: loggingMiddleware(corsMiddleware(authMiddleware(mux)))}
 
 	// Graceful shutdown
 	go func() {

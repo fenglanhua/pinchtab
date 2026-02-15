@@ -25,10 +25,10 @@ Pinchtab is a standalone HTTP server. Any agent, any language, even `curl`:
 
 ```bash
 # Read a page — 800 tokens instead of 10,000
-curl localhost:18800/text?tabId=X
+curl localhost:9867/text?tabId=X
 
 # Click a button by ref from the last snapshot
-curl -X POST localhost:18800/action -d '{"kind":"click","ref":"e5"}'
+curl -X POST localhost:9867/action -d '{"kind":"click","ref":"e5"}'
 ```
 
 | | Pinchtab | OpenClaw Browser |
@@ -72,7 +72,7 @@ Chrome opens. You log into your sites. Agents drive the rest.
 
 ### First-Time Login
 
-Pinchtab launches its own Chrome with a persistent profile at `~/.browser-bridge/chrome-profile/`. The first time you run it, log into any sites you want agents to access — just do it in the Chrome window that opens. Cookies and sessions persist across restarts, so you only need to do this once.
+Pinchtab launches its own Chrome with a persistent profile at `~/.pinchtab/chrome-profile/`. The first time you run it, log into any sites you want agents to access — just do it in the Chrome window that opens. Cookies and sessions persist across restarts, so you only need to do this once.
 
 ## Features
 
@@ -112,18 +112,18 @@ All via environment variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `BRIDGE_PORT` | `18800` | HTTP server port |
+| `BRIDGE_PORT` | `9867` | HTTP server port |
 | `BRIDGE_TOKEN` | *(none)* | Bearer token for auth |
 | `BRIDGE_HEADLESS` | `false` | Run Chrome headless |
-| `BRIDGE_PROFILE` | `~/.browser-bridge/chrome-profile` | Chrome profile directory |
-| `BRIDGE_STATE_DIR` | `~/.browser-bridge` | State/session storage |
+| `BRIDGE_PROFILE` | `~/.pinchtab/chrome-profile` | Chrome profile directory |
+| `BRIDGE_STATE_DIR` | `~/.pinchtab` | State/session storage |
 | `BRIDGE_NO_RESTORE` | `false` | Skip restoring tabs from previous session |
 | `CDP_URL` | *(none)* | Connect to existing Chrome instead of launching |
 
 ## Architecture
 
 ```
-┌─────────────┐     HTTP :18800    ┌──────────────┐                ┌─────────┐
+┌─────────────┐     HTTP :9867    ┌──────────────┐                ┌─────────┐
 │  Any Agent  │ ──────────────►   │  Pinchtab    │  ── CDP ──►   │ Chrome  │
 │  (OpenClaw, │  snapshot, act,   │              │                │         │
 │   PicoClaw, │  navigate, eval   │  stealth +   │                │  your   │
@@ -211,7 +211,7 @@ go test ./...
 ## Security
 
 - Set `BRIDGE_TOKEN` in production — without it, anyone on the network can control your browser
-- Chrome profile persists cookies/sessions — treat `~/.browser-bridge/` as sensitive
+- Chrome profile persists cookies/sessions — treat `~/.pinchtab/` as sensitive
 - Pinchtab binds to all interfaces by default — use a firewall or reverse proxy in exposed environments
 - No data leaves your machine — all processing is local
 

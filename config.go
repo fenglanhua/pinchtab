@@ -35,14 +35,15 @@ const (
 var stealthScript string
 
 var (
-	port            = envOr("BRIDGE_PORT", "18800")
+	port            = envOr("BRIDGE_PORT", "9867")
 	cdpURL          = os.Getenv("CDP_URL") // empty = launch Chrome ourselves
 	token           = os.Getenv("BRIDGE_TOKEN")
-	stateDir        = envOr("BRIDGE_STATE_DIR", filepath.Join(homeDir(), ".browser-bridge"))
+	stateDir        = envOr("BRIDGE_STATE_DIR", filepath.Join(homeDir(), ".pinchtab"))
 	headless        = os.Getenv("BRIDGE_HEADLESS") == "true"
 	noRestore       = os.Getenv("BRIDGE_NO_RESTORE") == "true"
-	profileDir      = envOr("BRIDGE_PROFILE", filepath.Join(homeDir(), ".browser-bridge", "chrome-profile"))
+	profileDir      = envOr("BRIDGE_PROFILE", filepath.Join(homeDir(), ".pinchtab", "chrome-profile"))
 	actionTimeout   = 15 * time.Second
+	navigateTimeout = 30 * time.Second
 	shutdownTimeout = 10 * time.Second
 )
 

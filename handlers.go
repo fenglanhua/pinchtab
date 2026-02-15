@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/cdproto/target"
@@ -293,11 +292,13 @@ func (b *Bridge) handleNavigate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tCtx, tCancel := context.WithTimeout(ctx, 30*time.Second)
+	tCtx, tCancel := context.WithTimeout(ctx, navigateTimeout)
 	defer tCancel()
 	go cancelOnClientDone(r.Context(), tCancel)
 
-	if err := chromedp.Run(tCtx, chromedp.Navigate(req.URL)); err != nil {
+	// Use raw CDP navigate + WaitReady instead of chromedp.Navigate
+	// which waits for the full load event (never fires on SPAs)
+	if err := navigatePage(tCtx, req.URL); err != nil {
 		jsonErr(w, 500, fmt.Errorf("navigate: %w", err))
 		return
 	}
@@ -317,55 +318,67 @@ func (b *Bridge) handleNavigate(w http.ResponseWriter, r *http.Request) {
 
 // ── POST /action ───────────────────────────────────────────
 
-// ActionFunc handles a single action kind (click, type, etc.).
-type ActionFunc func(ctx context.Context, sel string, nodeID int64, text string) (map[string]any, error)
+// actionRequest is the parsed JSON body for /action.
+type actionRequest struct {
+	TabID    string `json:"tabId"`
+	Kind     string `json:"kind"`
+	Ref      string `json:"ref"`
+	Selector string `json:"selector"`
+	Text     string `json:"text"`
+	Key      string `json:"key"`
+	NodeID   int64  `json:"nodeId"`
+}
+
+// ActionFunc handles a single action kind. Receives the full request for
+// clean access to all fields without parameter fragmentation.
+type ActionFunc func(ctx context.Context, req actionRequest) (map[string]any, error)
 
 func (b *Bridge) actionRegistry() map[string]ActionFunc {
 	return map[string]ActionFunc{
-		actionClick: func(ctx context.Context, sel string, nodeID int64, _ string) (map[string]any, error) {
-			if sel != "" {
-				return map[string]any{"clicked": true}, chromedp.Run(ctx, chromedp.Click(sel, chromedp.ByQuery))
+		actionClick: func(ctx context.Context, req actionRequest) (map[string]any, error) {
+			if req.Selector != "" {
+				return map[string]any{"clicked": true}, chromedp.Run(ctx, chromedp.Click(req.Selector, chromedp.ByQuery))
 			}
-			if nodeID > 0 {
-				return map[string]any{"clicked": true}, clickByNodeID(ctx, nodeID)
+			if req.NodeID > 0 {
+				return map[string]any{"clicked": true}, clickByNodeID(ctx, req.NodeID)
 			}
 			return nil, fmt.Errorf("need selector, ref, or nodeId")
 		},
-		actionType: func(ctx context.Context, sel string, nodeID int64, text string) (map[string]any, error) {
-			if text == "" {
+		actionType: func(ctx context.Context, req actionRequest) (map[string]any, error) {
+			if req.Text == "" {
 				return nil, fmt.Errorf("text required for type")
 			}
-			if sel != "" {
-				return map[string]any{"typed": text}, chromedp.Run(ctx,
-					chromedp.Click(sel, chromedp.ByQuery),
-					chromedp.SendKeys(sel, text, chromedp.ByQuery),
+			if req.Selector != "" {
+				return map[string]any{"typed": req.Text}, chromedp.Run(ctx,
+					chromedp.Click(req.Selector, chromedp.ByQuery),
+					chromedp.SendKeys(req.Selector, req.Text, chromedp.ByQuery),
 				)
 			}
-			if nodeID > 0 {
-				return map[string]any{"typed": text}, typeByNodeID(ctx, nodeID, text)
+			if req.NodeID > 0 {
+				return map[string]any{"typed": req.Text}, typeByNodeID(ctx, req.NodeID, req.Text)
 			}
 			return nil, fmt.Errorf("need selector or ref")
 		},
-		actionFill: func(ctx context.Context, sel string, _ int64, text string) (map[string]any, error) {
-			if sel != "" {
-				return map[string]any{"filled": text}, chromedp.Run(ctx, chromedp.SetValue(sel, text, chromedp.ByQuery))
+		actionFill: func(ctx context.Context, req actionRequest) (map[string]any, error) {
+			if req.Selector != "" {
+				return map[string]any{"filled": req.Text}, chromedp.Run(ctx, chromedp.SetValue(req.Selector, req.Text, chromedp.ByQuery))
 			}
-			return map[string]any{"filled": text}, nil
+			return map[string]any{"filled": req.Text}, nil
 		},
-		actionPress: func(ctx context.Context, _ string, _ int64, key string) (map[string]any, error) {
-			if key == "" {
+		actionPress: func(ctx context.Context, req actionRequest) (map[string]any, error) {
+			if req.Key == "" {
 				return nil, fmt.Errorf("key required for press")
 			}
-			return map[string]any{"pressed": key}, chromedp.Run(ctx, chromedp.KeyEvent(key))
+			return map[string]any{"pressed": req.Key}, chromedp.Run(ctx, chromedp.KeyEvent(req.Key))
 		},
-		actionFocus: func(ctx context.Context, sel string, nodeID int64, _ string) (map[string]any, error) {
-			if sel != "" {
-				return map[string]any{"focused": true}, chromedp.Run(ctx, chromedp.Focus(sel, chromedp.ByQuery))
+		actionFocus: func(ctx context.Context, req actionRequest) (map[string]any, error) {
+			if req.Selector != "" {
+				return map[string]any{"focused": true}, chromedp.Run(ctx, chromedp.Focus(req.Selector, chromedp.ByQuery))
 			}
-			if nodeID > 0 {
+			if req.NodeID > 0 {
 				return map[string]any{"focused": true}, chromedp.Run(ctx,
 					chromedp.ActionFunc(func(ctx context.Context) error {
-						p := map[string]any{"backendNodeId": nodeID}
+						p := map[string]any{"backendNodeId": req.NodeID}
 						return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.focus", p, nil)
 					}),
 				)
@@ -376,15 +389,7 @@ func (b *Bridge) actionRegistry() map[string]ActionFunc {
 }
 
 func (b *Bridge) handleAction(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		TabID    string `json:"tabId"`
-		Kind     string `json:"kind"`
-		Ref      string `json:"ref"`
-		Selector string `json:"selector"`
-		Text     string `json:"text"`
-		Key      string `json:"key"`
-		NodeID   int64  `json:"nodeId"`
-	}
+	var req actionRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
 		jsonErr(w, 400, fmt.Errorf("decode: %w", err))
 		return
@@ -418,20 +423,13 @@ func (b *Bridge) handleAction(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	registry := b.actionRegistry()
-	fn, ok := registry[req.Kind]
+	fn, ok := b.actionRegistry()[req.Kind]
 	if !ok {
 		jsonResp(w, 400, map[string]string{"error": fmt.Sprintf("unknown action: %s", req.Kind)})
 		return
 	}
 
-	// For press, text field carries the key
-	text := req.Text
-	if req.Kind == actionPress {
-		text = req.Key
-	}
-
-	result, err := fn(tCtx, req.Selector, req.NodeID, text)
+	result, err := fn(tCtx, req)
 	if err != nil {
 		jsonErr(w, 500, fmt.Errorf("action %s: %w", req.Kind, err))
 		return
@@ -498,7 +496,7 @@ func (b *Bridge) handleTab(w http.ResponseWriter, r *http.Request) {
 		if req.URL != "" {
 			url = req.URL
 		}
-		if err := chromedp.Run(ctx, chromedp.Navigate(url)); err != nil {
+		if err := navigatePage(ctx, url); err != nil {
 			cancel()
 			jsonErr(w, 500, fmt.Errorf("new tab: %w", err))
 			return

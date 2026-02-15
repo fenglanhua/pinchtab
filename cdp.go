@@ -4,13 +4,40 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/chromedp/chromedp"
 )
 
-// clickByNodeID resolves a backend DOM node to a JS object and calls .click().
-// Uses DOM.resolveNode + Runtime.callFunctionOn which works on React/shadow DOM
-// where CSS selectors fail.
+// navigatePage uses raw CDP Page.navigate + polls for a non-blank URL.
+// Unlike chromedp.Navigate which waits for the full load event (hangs on SPAs),
+// this fires navigation and waits up to 5s for the page to start loading.
+func navigatePage(ctx context.Context, url string) error {
+	return chromedp.Run(ctx,
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			p := map[string]any{"url": url}
+			var navResult json.RawMessage
+			if err := chromedp.FromContext(ctx).Target.Execute(ctx, "Page.navigate", p, &navResult); err != nil {
+				return fmt.Errorf("Page.navigate: %w", err)
+			}
+
+			var resp struct {
+				ErrorText string `json:"errorText"`
+			}
+			if err := json.Unmarshal(navResult, &resp); err == nil && resp.ErrorText != "" {
+				return fmt.Errorf("navigate: %s", resp.ErrorText)
+			}
+			return nil
+		}),
+		// Brief sleep to let the page start rendering — not a full load wait.
+		// Agents should use /snapshot to confirm readiness.
+		chromedp.Sleep(500 * time.Millisecond),
+	)
+}
+
+// clickByNodeID resolves a backend DOM node to a JS object, scrolls it into
+// view, and calls .click(). Uses DOM.resolveNode + Runtime.callFunctionOn
+// which works on React/shadow DOM where CSS selectors fail.
 func clickByNodeID(ctx context.Context, backendNodeID int64) error {
 	return chromedp.Run(ctx,
 		chromedp.ActionFunc(func(ctx context.Context) error {
@@ -31,11 +58,10 @@ func clickByNodeID(ctx context.Context, backendNodeID int64) error {
 	)
 }
 
-// typeByNodeID focuses a DOM node and sends keyboard events.
+// typeByNodeID scrolls an element into view, focuses it, and sends keyboard events.
 func typeByNodeID(ctx context.Context, backendNodeID int64, text string) error {
 	return chromedp.Run(ctx,
 		chromedp.ActionFunc(func(ctx context.Context) error {
-			// scrollIntoView before focus
 			objectID, err := resolveNodeToObject(ctx, backendNodeID)
 			if err != nil {
 				return err

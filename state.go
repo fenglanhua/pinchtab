@@ -70,6 +70,10 @@ func (b *Bridge) SaveState() {
 		slog.Error("save state: marshal", "err", err)
 		return
 	}
+	if err := os.MkdirAll(stateDir, 0755); err != nil {
+		slog.Error("save state: mkdir", "err", err)
+		return
+	}
 	path := filepath.Join(stateDir, "sessions.json")
 	if err := os.WriteFile(path, data, 0644); err != nil {
 		slog.Error("save state: write", "err", err)
@@ -96,17 +100,28 @@ func (b *Bridge) RestoreState() {
 			continue
 		}
 		ctx, cancel := chromedp.NewContext(b.browserCtx)
-		tCtx, tCancel := context.WithTimeout(ctx, 10*time.Second)
-		if err := chromedp.Run(tCtx, chromedp.Navigate(tab.URL)); err != nil {
-			tCancel()
+		// Just initialize the tab context (attaches to Chrome) — don't navigate yet.
+		// The agent will navigate when it needs the tab.
+		if err := chromedp.Run(ctx); err != nil {
 			cancel()
 			slog.Warn("restore tab failed", "url", tab.URL, "err", err)
 			continue
 		}
-		tCancel()
 		newID := string(chromedp.FromContext(ctx).Target.TargetID)
+		b.mu.Lock()
 		b.tabs[newID] = &TabEntry{ctx: ctx, cancel: cancel}
+		b.mu.Unlock()
 		restored++
+
+		// Fire-and-forget navigate — don't block on page load
+		go func(tabCtx context.Context, url string) {
+			tCtx, tCancel := context.WithTimeout(tabCtx, 10*time.Second)
+			defer tCancel()
+			chromedp.Run(tCtx, chromedp.ActionFunc(func(ctx context.Context) error {
+				p := map[string]any{"url": url}
+				return chromedp.FromContext(ctx).Target.Execute(ctx, "Page.navigate", p, nil)
+			}))
+		}(ctx, tab.URL)
 	}
 	if restored > 0 {
 		slog.Info("restored tabs", "count", restored)
