@@ -154,7 +154,7 @@ func handleConfigCommand() {
 			fmt.Printf("Config file already exists at %s\n", configPath)
 			fmt.Print("Overwrite? (y/N): ")
 			var response string
-			fmt.Scanln(&response)
+			_, _ = fmt.Scanln(&response)
 			if response != "y" && response != "Y" {
 				return
 			}
