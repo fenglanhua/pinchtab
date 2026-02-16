@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/cdproto/dom"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
@@ -262,6 +263,7 @@ type actionRequest struct {
 	ScrollX  int    `json:"scrollX"`
 	ScrollY  int    `json:"scrollY"`
 	WaitNav  bool   `json:"waitNav"`
+	Fast     bool   `json:"fast"` // For humanType: fast typing mode
 }
 
 // ActionFunc handles a single action kind. Receives the full request for
@@ -372,6 +374,63 @@ func (b *Bridge) actionRegistry() map[string]ActionFunc {
 			// Default: scroll down one viewport
 			return map[string]any{"scrolled": true, "y": 800},
 				chromedp.Run(ctx, chromedp.Evaluate("window.scrollBy(0, 800)", nil))
+		},
+		actionHumanClick: func(ctx context.Context, req actionRequest) (map[string]any, error) {
+			// Human-like click with natural mouse movement
+			if req.NodeID > 0 {
+				if err := humanClickElement(ctx, cdp.NodeID(req.NodeID)); err != nil {
+					return nil, err
+				}
+				return map[string]any{"clicked": true, "human": true}, nil
+			}
+			if req.Selector != "" {
+				// Get element to click
+				var nodes []*cdp.Node
+				if err := chromedp.Run(ctx,
+					chromedp.Nodes(req.Selector, &nodes, chromedp.ByQuery),
+				); err != nil {
+					return nil, err
+				}
+				if len(nodes) == 0 {
+					return nil, fmt.Errorf("element not found: %s", req.Selector)
+				}
+				if err := humanClickElement(ctx, nodes[0].NodeID); err != nil {
+					return nil, err
+				}
+				return map[string]any{"clicked": true, "human": true}, nil
+			}
+			return nil, fmt.Errorf("need selector, ref, or nodeId")
+		},
+		actionHumanType: func(ctx context.Context, req actionRequest) (map[string]any, error) {
+			if req.Text == "" {
+				return nil, fmt.Errorf("text required for humanType")
+			}
+
+			// Focus element first
+			if req.Selector != "" {
+				if err := chromedp.Run(ctx, chromedp.Focus(req.Selector, chromedp.ByQuery)); err != nil {
+					return nil, err
+				}
+			} else if req.NodeID > 0 {
+				if err := chromedp.Run(ctx,
+					chromedp.ActionFunc(func(ctx context.Context) error {
+						return dom.Focus().WithNodeID(cdp.NodeID(req.NodeID)).Do(ctx)
+					}),
+				); err != nil {
+					return nil, err
+				}
+			} else {
+				return nil, fmt.Errorf("need selector, ref, or nodeId")
+			}
+
+			// Type with human-like timing
+			fast := req.Fast // Optional "fast" mode for humanType
+			actions := humanType(req.Text, fast)
+			if err := chromedp.Run(ctx, actions...); err != nil {
+				return nil, err
+			}
+
+			return map[string]any{"typed": req.Text, "human": true}, nil
 		},
 	}
 }

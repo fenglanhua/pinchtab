@@ -20,14 +20,16 @@ const filterInteractive = "interactive"
 
 // Action kinds for /action endpoint.
 const (
-	actionClick  = "click"
-	actionType   = "type"
-	actionFill   = "fill"
-	actionPress  = "press"
-	actionFocus  = "focus"
-	actionHover  = "hover"
-	actionSelect = "select"
-	actionScroll = "scroll"
+	actionClick      = "click"
+	actionType       = "type"
+	actionFill       = "fill"
+	actionPress      = "press"
+	actionFocus      = "focus"
+	actionHover      = "hover"
+	actionSelect     = "select"
+	actionScroll     = "scroll"
+	actionHumanClick = "humanClick"
+	actionHumanType  = "humanType"
 )
 
 // Tab actions for /tab endpoint.
