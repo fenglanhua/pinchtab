@@ -68,14 +68,16 @@ Your agent can clone, build, and configure Pinchtab using the [OpenClaw skill](s
 # Build
 go build -o pinchtab .
 
-# Run (launches Chrome window — you can see and interact)
+# Headed mode (default) — Chrome window visible, human can watch and interact
 ./pinchtab
 
-# Run headless
+# Headless mode — no window, pure automation
 BRIDGE_HEADLESS=true ./pinchtab
 ```
 
-Chrome opens. You log into your sites. Agents drive the rest.
+**Headed mode** (default): Chrome opens as a normal window. You can see what the agent is doing, interact with the browser yourself, and log into sites. Best for development, debugging, and first-time setup.
+
+**Headless mode**: Chrome runs invisibly in the background. Same API, same capabilities, just no window. Best for servers, CI, and unattended automation.
 
 ### First-Time Login
 
@@ -131,7 +133,7 @@ All via environment variables:
 |----------|---------|-------------|
 | `BRIDGE_PORT` | `9867` | HTTP server port |
 | `BRIDGE_TOKEN` | *(none)* | Bearer token for auth |
-| `BRIDGE_HEADLESS` | `false` | Run Chrome headless |
+| `BRIDGE_HEADLESS` | `false` | Run Chrome in headless mode (no window). Default is headed (visible). |
 | `BRIDGE_PROFILE` | `~/.pinchtab/chrome-profile` | Chrome profile directory |
 | `BRIDGE_STATE_DIR` | `~/.pinchtab` | State/session storage |
 | `BRIDGE_NO_RESTORE` | `false` | Skip restoring tabs from previous session |
