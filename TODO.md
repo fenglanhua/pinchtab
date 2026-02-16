@@ -24,10 +24,10 @@ BridgeAPI interface, handler tests, nil guard, deprecated flag removal.
 - [x] **LaunchAgent/systemd** — auto-start on boot
 - [x] **Config file** — `~/.pinchtab/config.json` (alternative to env vars)
 
-## P7: Nice to Have
-- [ ] **File-based output** — `?output=file` saves snapshot to disk, returns path
-- [ ] **Compact format** — YAML or indented text instead of JSON
-- [ ] **Docker image** — `docker run pinchtab` with bundled Chromium
+## P7: Nice to Have — COMPLETE! ✅
+- [x] **File-based output** — `?output=file` saves snapshot to disk, returns path
+- [x] **Compact format** — YAML or indented text instead of JSON
+- [x] **Docker image** — `docker run pinchtab` with bundled Chromium
 
 ## P8: Stealth & Anti-Detection
 - [ ] **Enhanced stealth mode** — Fix additional headless detection vectors (pointer type, viewport handling, content isolations)
