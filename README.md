@@ -49,6 +49,13 @@ curl -X POST localhost:9867/action -d '{"kind":"click","ref":"e5"}'
 
 ## Quick Start
 
+### Docker (easiest)
+
+```bash
+docker run -d -p 9867:9867 --security-opt seccomp=unconfined pinchtab/pinchtab
+curl http://localhost:9867/health
+```
+
 ### With your AI agent
 
 > Install Pinchtab and set it up for browser automation.
