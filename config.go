@@ -52,6 +52,7 @@ var (
 	headless        = os.Getenv("BRIDGE_HEADLESS") == "true"
 	noRestore       = os.Getenv("BRIDGE_NO_RESTORE") == "true"
 	profileDir      = envOr("BRIDGE_PROFILE", filepath.Join(homeDir(), ".pinchtab", "chrome-profile"))
+	chromeVersion   = envOr("BRIDGE_CHROME_VERSION", "133.0.6943.98")
 	actionTimeout   = 15 * time.Second
 	navigateTimeout = 30 * time.Second
 	shutdownTimeout = 10 * time.Second

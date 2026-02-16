@@ -1,13 +1,26 @@
 // Enhanced stealth script injected into every new document via page.AddScriptToEvaluateOnNewDocument.
 // Hides automation indicators from sophisticated bot detection systems like X.com.
 
-// Hardware values - seeded and consistent per session
-// MUST BE DEFINED FIRST before any usage
-const sessionSeed = Date.now() % 1000000;
-const seededRandom = (seed) => {
-  const x = Math.sin(seed) * 10000;
-  return x - Math.floor(x);
-};
+// Session-stable seed injected by Go at launch time via __pinchtab_seed.
+// Falls back to a fixed value if not set (shouldn't happen in normal operation).
+// This seed is constant across all page loads within the same Pinchtab session,
+// so hardware fingerprint values stay consistent (as they would in a real browser).
+const sessionSeed = (typeof __pinchtab_seed !== 'undefined') ? __pinchtab_seed : 42;
+
+// Mulberry32 PRNG — simple, fast, uniform distribution, deterministic.
+// Much better than Math.sin() which produces visible patterns.
+const seededRandom = (function() {
+  const cache = {};
+  return function(seed) {
+    if (cache[seed] !== undefined) return cache[seed];
+    let t = (seed + 0x6D2B79F5) | 0;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    const result = ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    cache[seed] = result;
+    return result;
+  };
+})();
 
 // Hide webdriver flag completely
 Object.defineProperty(navigator, 'webdriver', { 

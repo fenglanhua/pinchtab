@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
@@ -86,7 +87,7 @@ func main() {
 			chromedp.Flag("js-flags", "--random-seed=1157259157"),
 
 			// Identity - more realistic user agent with proper versioning
-			chromedp.UserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"),
+			chromedp.UserAgent(fmt.Sprintf("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/%s Safari/537.36", chromeVersion)),
 			chromedp.WindowSize(1366, 768), // More common resolution
 		}
 
@@ -104,10 +105,12 @@ func main() {
 	browserCtx, browserCancel := chromedp.NewContext(bridge.allocCtx)
 	defer browserCancel()
 
-	// Inject stealth script (embedded from stealth.js)
+	// Inject stealth script with a session-stable seed (stays constant across page loads)
+	stealthSeed := rand.Intn(1000000000)
+	seededScript := fmt.Sprintf("var __pinchtab_seed = %d;\n", stealthSeed) + stealthScript
 	if err := chromedp.Run(browserCtx,
 		chromedp.ActionFunc(func(ctx context.Context) error {
-			_, err := page.AddScriptToEvaluateOnNewDocument(stealthScript).Do(ctx)
+			_, err := page.AddScriptToEvaluateOnNewDocument(seededScript).Do(ctx)
 			return err
 		}),
 	); err != nil {

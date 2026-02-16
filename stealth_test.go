@@ -108,7 +108,7 @@ func TestGenerateFingerprint(t *testing.T) {
 				OS:      "windows",
 				Browser: "chrome",
 			},
-			wantUA:   "Chrome/131",
+			wantUA:   "Chrome/" + chromeVersion,
 			wantPlat: "Win32",
 		},
 		{
@@ -117,7 +117,7 @@ func TestGenerateFingerprint(t *testing.T) {
 				OS:      "mac",
 				Browser: "chrome",
 			},
-			wantUA:   "Chrome/131",
+			wantUA:   "Chrome/" + chromeVersion,
 			wantPlat: "MacIntel",
 		},
 		{
@@ -126,8 +126,8 @@ func TestGenerateFingerprint(t *testing.T) {
 				OS:      "random",
 				Browser: "chrome",
 			},
-			wantUA:   "Chrome/131", // Should always have Chrome 131
-			wantPlat: "",           // Could be Win32, MacIntel, or Linux
+			wantUA:   "Chrome/" + chromeVersion, // Should use configured chromeVersion
+			wantPlat: "",                        // Could be Win32, MacIntel, or Linux
 		},
 	}
 

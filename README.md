@@ -137,6 +137,7 @@ All via environment variables:
 | `BRIDGE_PROFILE` | `~/.pinchtab/chrome-profile` | Chrome profile directory |
 | `BRIDGE_STATE_DIR` | `~/.pinchtab` | State/session storage |
 | `BRIDGE_NO_RESTORE` | `false` | Skip restoring tabs from previous session |
+| `BRIDGE_CHROME_VERSION` | `133.0.6943.98` | Chrome version in User-Agent strings (keep current to avoid detection) |
 | `CDP_URL` | *(none)* | Connect to existing Chrome instead of launching |
 
 ## Architecture

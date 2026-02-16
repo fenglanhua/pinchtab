@@ -274,19 +274,19 @@ func generateFingerprint(req fingerprintRequest) fingerprint {
 	osConfigs := map[string]map[string]fingerprint{
 		"windows": {
 			"chrome": {
-				UserAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+				UserAgent: fmt.Sprintf("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/%s Safari/537.36", chromeVersion),
 				Platform:  "Win32",
 				Vendor:    "Google Inc.",
 			},
 			"edge": {
-				UserAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0",
+				UserAgent: fmt.Sprintf("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/%s Safari/537.36 Edg/%s", chromeVersion, chromeVersion),
 				Platform:  "Win32",
 				Vendor:    "Google Inc.",
 			},
 		},
 		"mac": {
 			"chrome": {
-				UserAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+				UserAgent: fmt.Sprintf("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/%s Safari/537.36", chromeVersion),
 				Platform:  "MacIntel",
 				Vendor:    "Google Inc.",
 			},
