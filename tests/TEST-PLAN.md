@@ -183,7 +183,56 @@ Multiple agents (or concurrent scripts) hitting the same Pinchtab instance.
 
 ---
 
-## 4. Error Handling & Edge Cases
+## 4. Stealth Integration Tests (require Chrome)
+
+These need a running Pinchtab + Chrome instance. Use build tag `integration`.
+
+| # | Scenario | Steps | Expected |
+|---|----------|-------|----------|
+| SI1 | Webdriver hidden | Eval `navigator.webdriver` | `undefined` (not `false`) |
+| SI2 | Chrome runtime exists | Eval `!!window.chrome && !!window.chrome.runtime` | `true` |
+| SI3 | Plugins populated | Eval `navigator.plugins.length` | ≥ 3 |
+| SI4 | Canvas noise applied | Eval `toDataURL` twice on same canvas | Different outputs |
+| SI5 | Canvas source not mutated | Draw on canvas, export, check original pixels | Original unchanged |
+| SI6 | Font metrics noise | Eval `measureText('test').width` twice | Consistent (seeded) but different from real |
+| SI7 | Font metrics prototype | Eval `measureText('x') instanceof TextMetrics` | `true` |
+| SI8 | WebGL vendor spoofed | Eval `getParameter(UNMASKED_VENDOR_WEBGL)` | "Intel Inc." |
+| SI9 | WebRTC no local IPs | Create RTCPeerConnection, gather ICE candidates | No local/private IPs leaked |
+| SI10 | Hardware values stable | Eval `navigator.hardwareConcurrency` across 3 navigations | Same value each time |
+| SI11 | Fingerprint rotation | `POST /fingerprint/rotate {"os":"windows"}`, check navigator.userAgent | Contains "Windows" |
+| SI12 | Fingerprint random OS | `POST /fingerprint/rotate {}` | Valid fingerprint, random OS |
+| SI13 | Chrome version matches | Compare `--user-agent` flag value with `navigator.userAgent` | Same Chrome version string |
+| SI14 | bot.sannysoft.com | Navigate, screenshot, check results | Most items green |
+| SI15 | creepjs | Navigate to `abrahamjuliot.github.io/creepjs/` | Trust score reasonable |
+| SI16 | browserleaks | Navigate to `browserleaks.com/javascript` | No automation flags detected |
+
+---
+
+## 5. Docker Scenarios
+
+| # | Scenario | Steps | Expected |
+|---|----------|-------|----------|
+| D1 | Docker build | `docker build -t pinchtab .` | Builds successfully |
+| D2 | Docker run | `docker run -d -p 9867:9867 pinchtab` | Container starts, health returns 200 |
+| D3 | Docker navigate | Navigate to example.com from host | Works, returns title |
+| D4 | Docker snapshot | `GET /snapshot` from host | Valid JSON |
+| D5 | Docker with token | `docker run -e BRIDGE_TOKEN=secret ...` | Auth enforced |
+| D6 | Docker CHROME_BINARY | Verify Chromium binary path consumed | Uses container Chromium |
+| D7 | Docker CHROME_FLAGS | Set custom flags via env | Flags applied |
+
+---
+
+## 6. Configuration — Extended
+
+| # | Scenario | Steps | Expected |
+|---|----------|-------|----------|
+| CF6 | Chrome version override | `BRIDGE_CHROME_VERSION=134.0.0.0 ./pinchtab` | UA string uses 134 |
+| CF7 | Chrome version default | Start without `BRIDGE_CHROME_VERSION` | UA uses 133.0.6943.98 |
+| CF8 | Chrome version in fingerprint | Set version, then `POST /fingerprint/rotate` | Rotated fingerprint uses same Chrome version |
+
+---
+
+## 7. Error Handling & Edge Cases
 
 | # | Scenario | Steps | Expected |
 |---|----------|-------|----------|
@@ -198,7 +247,7 @@ Multiple agents (or concurrent scripts) hitting the same Pinchtab instance.
 
 ---
 
-## 5. Known Issues (from QA rounds)
+## 8. Known Issues (from QA rounds)
 
 Track these separately — they are known bugs, not test failures.
 
@@ -208,15 +257,15 @@ Track these separately — they are known bugs, not test failures.
 | K2 | Tab close hangs | 🟡 P1 | OPEN | Regression from Round 2 fixes. Was 400, now hangs indefinitely. |
 | K3 | x.com title always empty | 🟢 P2 | OPEN | SPA hydration too slow for navigate timeout. |
 | K4 | Chrome flag warning banner | 🟢 P2 | OPEN | `--disable-blink-features=AutomationControlled` deprecated in Chrome 144+. |
-| K5 | Stealth PRNG weak (8F-2) | 🟡 P1 | OPEN | `Math.sin` seeded PRNG, session seed may drift between navigations. |
-| K6 | Chrome UA hardcoded to 131 (8F-6) | 🟡 P1 | OPEN | Current stable is 133+. |
-| K7 | Fingerprint rotation JS-only (8F-7) | 🟢 P2 | OPEN | Detectable via `getOwnPropertyDescriptor`. |
-| K8 | Timezone hardcoded EST (8F-9) | 🟢 P2 | OPEN | `Intl.DateTimeFormat` leaks real TZ. |
-| K9 | Stealth status hardcoded (8F-10) | 🟢 P2 | OPEN | No actual browser probing. |
+| K5 | Stealth PRNG weak (8F-2) | 🟡 P1 | ✅ FIXED | Now uses Mulberry32 with Go-injected seed. |
+| K6 | Chrome UA hardcoded to 131 (8F-6) | 🟡 P1 | ✅ FIXED | Configurable via `BRIDGE_CHROME_VERSION`, default 133. |
+| K7 | Fingerprint rotation JS-only (8F-7) | 🟢 P2 | OPEN | Detectable via `getOwnPropertyDescriptor`. Nice-to-have CDP fix. |
+| K8 | Timezone hardcoded EST (8F-9) | 🟢 P2 | OPEN | `Intl.DateTimeFormat` leaks real TZ. Nice-to-have CDP fix. |
+| K9 | Stealth status hardcoded (8F-10) | 🟢 P2 | ✅ FIXED | Now probes browser when tab available. |
 
 ---
 
-## 6. Release Criteria for Stable v1.0
+## 9. Release Criteria for Stable v1.0
 
 ### Must Pass (P0)
 - All Section 1 scenarios (core endpoints) pass in headless
