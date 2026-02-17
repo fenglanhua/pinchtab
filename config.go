@@ -63,6 +63,7 @@ var (
 	chromeBinary     = os.Getenv("CHROME_BINARY")                // path to Chrome/Chromium binary
 	chromeExtraFlags = os.Getenv("CHROME_FLAGS")                 // extra flags (space-separated)
 	noAnimations     = os.Getenv("BRIDGE_NO_ANIMATIONS") == "true"
+	stealthLevel     = envOr("BRIDGE_STEALTH", "light") // "light" or "full"
 	actionTimeout    = 15 * time.Second
 	navigateTimeout  = 30 * time.Second
 	shutdownTimeout  = 10 * time.Second

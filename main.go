@@ -140,7 +140,7 @@ func main() {
 
 	// Prepare stealth script
 	stealthSeed := rand.Intn(1000000000)
-	seededScript := fmt.Sprintf("var __pinchtab_seed = %d;\n", stealthSeed) + stealthScript
+	seededScript := fmt.Sprintf("var __pinchtab_seed = %d;\nvar __pinchtab_stealth_level = %q;\n", stealthSeed, stealthLevel) + stealthScript
 	bridge.stealthScript = seededScript
 
 	// startChrome connects to Chrome with a timeout. Returns browserCtx and cancel,

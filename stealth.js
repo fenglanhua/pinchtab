@@ -84,21 +84,20 @@ Object.defineProperty(navigator.connection || {}, 'rtt', {
   get: () => 100,
 });
 
+// Stealth level: 'light' = basic automation hiding only, 'full' = all fingerprint spoofing.
+// Light mode avoids canvas/WebGL/font overrides that can break sites like X.com.
+// Set via __pinchtab_stealth_level (injected by Go). Default: 'light'.
+const stealthLevel = (typeof __pinchtab_stealth_level !== 'undefined') ? __pinchtab_stealth_level : 'light';
+
+if (stealthLevel === 'full') {
+
 // Spoof WebGL for fingerprint resistance
 const getParameter = WebGLRenderingContext.prototype.getParameter;
 WebGLRenderingContext.prototype.getParameter = function(parameter) {
-  // Spoof common WebGL parameters that are used for fingerprinting
-  if (parameter === 37445) { // UNMASKED_VENDOR_WEBGL
-    return 'Intel Inc.';
-  }
-  if (parameter === 37446) { // UNMASKED_RENDERER_WEBGL
-    return 'Intel Iris OpenGL Engine';
-  }
+  if (parameter === 37445) return 'Intel Inc.';
+  if (parameter === 37446) return 'Intel Iris OpenGL Engine';
   return getParameter.apply(this, arguments);
 };
-
-// Mouse event realism (add slight randomness)
-// Mouse event handling - removed wrapper as it can break legitimate functionality
 
 // Canvas fingerprinting noise
 const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
@@ -108,64 +107,44 @@ const originalGetImageData = CanvasRenderingContext2D.prototype.getImageData;
 HTMLCanvasElement.prototype.toDataURL = function(...args) {
   const context = this.getContext('2d');
   if (context && this.width > 0 && this.height > 0) {
-    // Create a temporary canvas for noise injection
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width = this.width;
     tempCanvas.height = this.height;
     const tempCtx = tempCanvas.getContext('2d');
-    
-    // Copy current canvas
     tempCtx.drawImage(this, 0, 0);
-    
-    // Add imperceptible noise to a few pixels
     const imageData = tempCtx.getImageData(0, 0, this.width, this.height);
     const pixelCount = Math.min(10, Math.floor(imageData.data.length / 400));
-    
     for (let i = 0; i < pixelCount; i++) {
       const idx = Math.floor(seededRandom(sessionSeed + i) * (imageData.data.length / 4)) * 4;
-      // Tiny 1-bit changes
       if (imageData.data[idx] < 255) imageData.data[idx] += 1;
       if (imageData.data[idx + 1] < 255) imageData.data[idx + 1] += 1;
     }
-    
     tempCtx.putImageData(imageData, 0, 0);
     return originalToDataURL.apply(tempCanvas, args);
   }
-  
   return originalToDataURL.apply(this, args);
 };
 
 HTMLCanvasElement.prototype.toBlob = function(callback, type, quality) {
-  // Use toDataURL which has noise, then convert to blob
   const dataURL = this.toDataURL(type, quality);
   const arr = dataURL.split(',');
   const mime = arr[0].match(/:(.*?);/)[1];
   const bstr = atob(arr[1]);
   let n = bstr.length;
   const u8arr = new Uint8Array(n);
-  while(n--){
-    u8arr[n] = bstr.charCodeAt(n);
-  }
+  while(n--){ u8arr[n] = bstr.charCodeAt(n); }
   const blob = new Blob([u8arr], {type: mime});
-  
-  // Add human-like async delay
   setTimeout(() => callback(blob), 5 + seededRandom(sessionSeed + 1000) * 10);
 };
 
 CanvasRenderingContext2D.prototype.getImageData = function(...args) {
   const imageData = originalGetImageData.apply(this, args);
-  
-  // Only add noise to a few pixels to maintain visual integrity
-  // This is enough to change fingerprint without breaking functionality
   const pixelCount = imageData.data.length / 4;
-  const noisyPixels = Math.min(10, pixelCount * 0.0001); // Very few pixels
-  
+  const noisyPixels = Math.min(10, pixelCount * 0.0001);
   for (let i = 0; i < noisyPixels; i++) {
     const pixelIndex = Math.floor(Math.random() * pixelCount) * 4;
-    // Tiny changes that won't be visible
     imageData.data[pixelIndex] = Math.min(255, Math.max(0, imageData.data[pixelIndex] + (Math.random() > 0.5 ? 1 : -1)));
   }
-  
   return imageData;
 };
 
@@ -174,30 +153,25 @@ const originalMeasureText = CanvasRenderingContext2D.prototype.measureText;
 CanvasRenderingContext2D.prototype.measureText = function(text) {
   const metrics = originalMeasureText.apply(this, arguments);
   const noise = 0.0001 + (seededRandom(sessionSeed + text.length) * 0.0002);
-  
-  // Return a proper TextMetrics object
   return new Proxy(metrics, {
     get(target, prop) {
-      if (prop === 'width') {
-        return target.width * (1 + noise);
-      }
+      if (prop === 'width') return target.width * (1 + noise);
       return target[prop];
     }
   });
 };
 
-// WebRTC IP leak prevention - hide local IPs
+// WebRTC IP leak prevention
 if (window.RTCPeerConnection) {
   const originalRTCPeerConnection = window.RTCPeerConnection;
   window.RTCPeerConnection = function(config, constraints) {
-    // Force TURN relay to hide local IPs
-    if (config && config.iceServers) {
-      config.iceTransportPolicy = 'relay';
-    }
+    if (config && config.iceServers) config.iceTransportPolicy = 'relay';
     return new originalRTCPeerConnection(config, constraints);
   };
   window.RTCPeerConnection.prototype = originalRTCPeerConnection.prototype;
 }
+
+} // end stealthLevel === 'full'
 
 // Timezone spoofing - configurable via window.__pinchtab_timezone
 const __pinchtab_origGetTimezoneOffset = Date.prototype.getTimezoneOffset;
