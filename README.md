@@ -258,7 +258,7 @@ Everything else is Go standard library.
 
 ## Requirements
 
-- **Go 1.24+** (build from source) or download a [prebuilt binary](https://github.com/pinchtab/pinchtab/releases)
+- **Go 1.25+** (build from source) or download a [prebuilt binary](https://github.com/pinchtab/pinchtab/releases)
 - **Google Chrome** or Chromium installed
 
 ## Install

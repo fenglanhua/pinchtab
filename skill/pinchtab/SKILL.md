@@ -361,5 +361,5 @@ curl http://localhost:9867/health
 - Use `filter=interactive` by default, fall back to full snapshot when needed
 - Pinchtab persists sessions — tabs survive restarts (disable with `BRIDGE_NO_RESTORE=true`)
 - Chrome profile is persistent — cookies/logins carry over between runs
-- Use `BRIDGE_CHROME_VERSION` to match your installed Chrome version for stealth consistency
+- Chrome uses its native User-Agent by default — `BRIDGE_CHROME_VERSION` only affects fingerprint rotation
 - Use `BRIDGE_BLOCK_IMAGES=true` or `"blockImages": true` on navigate for read-heavy tasks — reduces bandwidth and memory
