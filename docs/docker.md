@@ -50,8 +50,14 @@ docker run -d \
 Environment variables:
 - `BRIDGE_PORT` - HTTP port (default: 9867)
 - `BRIDGE_TOKEN` - Auth token (optional)
-- `BRIDGE_HEADLESS` - Run Chrome headless (default: true)
+- `BRIDGE_HEADLESS` - Run Chrome headless (default: true in Docker)
 - `BRIDGE_STATE_DIR` - State directory (default: /data)
+- `BRIDGE_STEALTH` - Stealth level: `light` (default) or `full`
+- `BRIDGE_BLOCK_IMAGES` - Block image loading (default: false)
+- `BRIDGE_BLOCK_MEDIA` - Block all media (default: false)
+- `BRIDGE_NO_ANIMATIONS` - Disable CSS animations (default: false)
+- `CHROME_BINARY` - Set automatically in Docker (`/usr/bin/chromium-browser`)
+- `CHROME_FLAGS` - Set automatically in Docker (`--no-sandbox --disable-gpu`)
 
 ## Architecture
 

@@ -19,7 +19,7 @@ BRIDGE_HEADLESS=true ./pinchtab
 git config core.hooksPath .githooks
 ```
 
-Requires **Go 1.24+** and **Google Chrome**.
+Requires **Go 1.25+** and **Google Chrome**.
 
 ## Development Workflow
 
@@ -48,13 +48,22 @@ Tests don't require a running Chrome instance.
 Single Go package, all files in root:
 
 - `main.go` — entry point, Chrome launch, routes
-- `handlers.go` — HTTP handlers
-- `snapshot.go` — accessibility tree parsing
+- `handlers.go` — HTTP handlers (navigate, screenshot, tabs, lock)
+- `handler_snapshot.go` — snapshot handler (a11y tree, format, file output)
+- `handler_actions.go` — action/actions handlers
+- `handler_cookies.go` — cookie get/set
+- `handler_stealth.go` — stealth status, fingerprint rotation
+- `snapshot.go` — a11y tree parsing
 - `cdp.go` — Chrome DevTools Protocol helpers
-- `bridge.go` — tab management
-- `config.go` — environment config
+- `bridge.go` — tab management, Chrome lifecycle
+- `config.go` — environment config, embedded assets
+- `lock.go` — tab locking for multi-agent coordination
+- `animations.go` — CSS animation disabling
+- `human.go` — human-like interaction (bezier mouse, typing)
 - `state.go` — session persistence
-- `middleware.go` — auth, CORS
+- `middleware.go` — auth, CORS, logging
+- `stealth.js` — stealth script (light/full modes)
+- `welcome.html` — headed mode welcome page
 
 ## Style
 

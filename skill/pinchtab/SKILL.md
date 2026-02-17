@@ -33,12 +33,24 @@ metadata:
         - name: BRIDGE_NO_RESTORE
           optional: true
           description: "Skip restoring tabs from previous session (true/false)"
-        - name: BRIDGE_CHROME_VERSION
+        - name: BRIDGE_STEALTH
           optional: true
-          description: "Chrome UA version string (default: 133.0.6943.98)"
+          description: "Stealth level: light (default, basic) or full (canvas/WebGL/font spoofing)"
         - name: BRIDGE_BLOCK_IMAGES
           optional: true
           description: "Block image loading for faster, lower-bandwidth browsing (true/false)"
+        - name: BRIDGE_BLOCK_MEDIA
+          optional: true
+          description: "Block all media: images + fonts + CSS + video (true/false)"
+        - name: BRIDGE_NO_ANIMATIONS
+          optional: true
+          description: "Disable CSS animations/transitions globally (true/false)"
+        - name: CHROME_BINARY
+          optional: true
+          description: "Path to Chrome/Chromium binary (auto-detected if not set)"
+        - name: CHROME_FLAGS
+          optional: true
+          description: "Extra Chrome flags, space-separated"
         - name: BRIDGE_CONFIG
           optional: true
           description: "Path to config JSON file (default: ~/.pinchtab/config.json)"
@@ -118,8 +130,23 @@ curl "http://localhost:9867/snapshot?diff=true"
 # Text format — indented tree, ~40-60% fewer tokens than JSON
 curl "http://localhost:9867/snapshot?format=text"
 
+# Compact format — one-line-per-node, 56-64% fewer tokens than JSON (recommended)
+curl "http://localhost:9867/snapshot?format=compact"
+
 # YAML format
 curl "http://localhost:9867/snapshot?format=yaml"
+
+# Scope to CSS selector (e.g. main content only)
+curl "http://localhost:9867/snapshot?selector=main"
+
+# Truncate to ~N tokens
+curl "http://localhost:9867/snapshot?maxTokens=2000"
+
+# Combine for maximum efficiency
+curl "http://localhost:9867/snapshot?format=compact&selector=main&maxTokens=2000&filter=interactive"
+
+# Disable animations before capture
+curl "http://localhost:9867/snapshot?noAnimations=true"
 
 # Write to file
 curl "http://localhost:9867/snapshot?output=file&path=/tmp/snapshot.json"
@@ -127,7 +154,7 @@ curl "http://localhost:9867/snapshot?output=file&path=/tmp/snapshot.json"
 
 Returns flat JSON array of nodes with `ref`, `role`, `name`, `depth`, `value`, `nodeId`.
 
-**Token optimization**: Use `?filter=interactive` for action-oriented tasks (~75% fewer tokens). Use `?diff=true` on multi-step workflows to see only what changed. Use `?format=text` for cheapest structured output. Use full snapshot only when you need complete page understanding.
+**Token optimization**: Use `?format=compact` for best token efficiency. Add `?filter=interactive` for action-oriented tasks (~75% fewer nodes). Use `?selector=main` to scope to relevant content. Use `?maxTokens=2000` to cap output. Use `?diff=true` on multi-step workflows to see only changes. Combine all params freely.
 
 ### Act on elements
 
@@ -235,6 +262,22 @@ curl -X POST http://localhost:9867/tab \
 
 Multi-tab: pass `?tabId=TARGET_ID` to snapshot/screenshot/text, or `"tabId"` in POST body.
 
+### Tab locking (multi-agent)
+
+```bash
+# Lock a tab (default 30s timeout, max 5min)
+curl -X POST http://localhost:9867/tab/lock \
+  -H 'Content-Type: application/json' \
+  -d '{"tabId": "TARGET_ID", "owner": "agent-1", "timeoutSec": 60}'
+
+# Unlock
+curl -X POST http://localhost:9867/tab/unlock \
+  -H 'Content-Type: application/json' \
+  -d '{"tabId": "TARGET_ID", "owner": "agent-1"}'
+```
+
+Locked tabs show `owner` and `lockedUntil` in `/tabs`. Returns 409 on conflict.
+
 ### Batch actions
 
 ```bash
@@ -282,7 +325,8 @@ curl http://localhost:9867/health
 | `/text` | ~800 | Reading page content |
 | `/snapshot?filter=interactive` | ~3,600 | Finding buttons/links to click |
 | `/snapshot?diff=true` | varies | Multi-step workflows (only changes) |
-| `/snapshot?format=text` | ~40-60% less | Structured tree, cheaper than JSON |
+| `/snapshot?format=compact` | ~56-64% less | One-line-per-node, best token efficiency |
+| `/snapshot?format=text` | ~40-60% less | Indented tree, cheaper than JSON |
 | `/snapshot` | ~10,500 | Full page understanding |
 | `/screenshot` | ~2K (vision) | Visual verification |
 
@@ -298,8 +342,12 @@ curl http://localhost:9867/health
 | `BRIDGE_PROFILE` | `~/.pinchtab/chrome-profile` | Chrome profile dir |
 | `BRIDGE_STATE_DIR` | `~/.pinchtab` | State/session storage |
 | `BRIDGE_NO_RESTORE` | `false` | Skip tab restore on startup |
-| `BRIDGE_CHROME_VERSION` | `133.0.6943.98` | Chrome UA version string |
-| `BRIDGE_BLOCK_IMAGES` | `false` | Block image loading (faster, lower bandwidth) |
+| `BRIDGE_STEALTH` | `light` | Stealth level: `light` or `full` |
+| `BRIDGE_BLOCK_IMAGES` | `false` | Block image loading |
+| `BRIDGE_BLOCK_MEDIA` | `false` | Block all media (images + fonts + CSS + video) |
+| `BRIDGE_NO_ANIMATIONS` | `false` | Disable CSS animations/transitions |
+| `CHROME_BINARY` | (auto) | Path to Chrome/Chromium binary |
+| `CHROME_FLAGS` | (none) | Extra Chrome flags (space-separated) |
 | `BRIDGE_CONFIG` | `~/.pinchtab/config.json` | Path to config JSON file |
 | `BRIDGE_TIMEOUT` | `15` | Action timeout (seconds) |
 | `BRIDGE_NAV_TIMEOUT` | `30` | Navigation timeout (seconds) |

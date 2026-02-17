@@ -178,17 +178,19 @@ All via environment variables:
 |----------|---------|-------------|
 | `BRIDGE_PORT` | `9867` | HTTP server port |
 | `BRIDGE_TOKEN` | *(none)* | Bearer token for auth |
-| `BRIDGE_HEADLESS` | `false` | Run Chrome in headless mode (no window). Default is headed (visible). |
+| `BRIDGE_HEADLESS` | `false` | Run Chrome headless (no window) |
 | `BRIDGE_PROFILE` | `~/.pinchtab/chrome-profile` | Chrome profile directory |
 | `BRIDGE_STATE_DIR` | `~/.pinchtab` | State/session storage |
 | `BRIDGE_NO_RESTORE` | `false` | Skip restoring tabs from previous session |
-| `BRIDGE_CHROME_VERSION` | `133.0.6943.98` | Chrome version in User-Agent strings (keep current to avoid detection) |
-| `BRIDGE_BLOCK_IMAGES` | `false` | Block image loading (faster, lower bandwidth) |
+| `BRIDGE_STEALTH` | `light` | Stealth level: `light` (basic) or `full` (canvas/WebGL/font spoofing) |
+| `BRIDGE_BLOCK_IMAGES` | `false` | Block image loading |
+| `BRIDGE_BLOCK_MEDIA` | `false` | Block all media (images + fonts + CSS + video) |
 | `BRIDGE_NO_ANIMATIONS` | `false` | Disable CSS animations/transitions globally |
 | `BRIDGE_TIMEOUT` | `15` | Action timeout (seconds) |
 | `BRIDGE_NAV_TIMEOUT` | `30` | Navigation timeout (seconds) |
-| `BRIDGE_CHROME_VERSION` | `133.0.6943.98` | Chrome UA version string |
 | `BRIDGE_CONFIG` | `~/.pinchtab/config.json` | Path to config JSON file |
+| `CHROME_BINARY` | *(auto)* | Path to Chrome/Chromium binary |
+| `CHROME_FLAGS` | *(none)* | Extra Chrome flags (space-separated) |
 | `CDP_URL` | *(none)* | Connect to existing Chrome instead of launching |
 
 ## Architecture

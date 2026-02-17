@@ -32,15 +32,21 @@ pinchtab/
 ├── config.go            # Configuration: env vars, config file, embedded assets
 ├── bridge.go            # Bridge struct: tab management, Chrome lifecycle
 ├── interfaces.go        # BridgeAPI interface (for test mocking)
-├── handlers.go          # HTTP handlers: navigate, action, evaluate, cookies, stealth
+├── handlers.go          # HTTP handlers: navigate, screenshot, tabs, lock, shutdown
 ├── handler_snapshot.go  # Snapshot handler: a11y tree fetch, format, file output
+├── handler_actions.go   # Action/actions handlers: click, type, press, fill, etc.
+├── handler_cookies.go   # Cookie get/set handlers
+├── handler_stealth.go   # Stealth status, fingerprint rotation
 ├── snapshot.go          # A11y tree parsing: CDP response → flat A11yNode list
+├── lock.go              # Tab locking for multi-agent coordination
+├── animations.go        # CSS animation disabling (global + per-request)
 ├── human.go             # Human-like interaction: bezier mouse, natural typing
 ├── cdp.go               # Raw CDP helpers: navigate, readyState polling
 ├── state.go             # Session persistence: save/restore tabs to disk
 ├── middleware.go         # HTTP middleware: logging, auth token, CORS
-├── stealth.js           # Stealth script: injected into every page via CDP
+├── stealth.js           # Stealth script: light/full modes, injected via CDP
 ├── readability.js       # Readability extraction for /text endpoint
+├── welcome.html         # Headed mode welcome page (🦀 branding)
 ├── Dockerfile           # Alpine + Chromium container image
 └── scripts/
     ├── install-autostart.sh    # LaunchAgent/systemd installer

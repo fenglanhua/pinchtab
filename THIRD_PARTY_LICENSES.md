@@ -54,6 +54,12 @@ Pinchtab depends on the following open-source packages. All are compatible with 
 - **URL:** https://github.com/golang/sys
 - **Purpose:** Go system call wrappers
 
+### gopkg.in/yaml.v3
+- **License:** Apache 2.0 / MIT
+- **Copyright:** (c) 2006-2011 Kirill Simonov, (c) 2011-2019 Canonical Ltd
+- **URL:** https://github.com/go-yaml/yaml
+- **Purpose:** YAML output format for snapshots
+
 ## Summary
 
 | Package | License | Compatible |
@@ -66,5 +72,6 @@ Pinchtab depends on the following open-source packages. All are compatible with 
 | gobwas/httphead | MIT | ✅ |
 | gobwas/pool | MIT | ✅ |
 | golang.org/x/sys | BSD 3-Clause | ✅ |
+| gopkg.in/yaml.v3 | Apache 2.0/MIT | ✅ |
 
-All dependencies are MIT or BSD 3-Clause licensed, fully compatible with Pinchtab's MIT license.
+All dependencies are MIT, BSD 3-Clause, or Apache 2.0 licensed, fully compatible with Pinchtab's MIT license.
