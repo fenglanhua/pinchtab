@@ -89,7 +89,7 @@ All 100+ tests run against headless. The full API surface is validated here.
 
 ### Headed Mode (experimental)
 
-<img src="assets/pinchtab-icon.jpg" width="128" alt="Pinchtab mascot" />
+<img src="assets/pinchtab-mascot.png" width="128" alt="Pinchtab mascot" />
 
 Chrome opens as a visible window. Useful for debugging, watching agents work, and manually logging into sites. Shows the Pinchtab mascot on the welcome page.
 
