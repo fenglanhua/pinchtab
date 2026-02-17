@@ -180,6 +180,7 @@ func (b *Bridge) handleNavigate(w http.ResponseWriter, r *http.Request) {
 		URL       string  `json:"url"`
 		NewTab    bool    `json:"newTab"`
 		WaitTitle float64 `json:"waitTitle"` // seconds to wait for title (default 2, max 30)
+		Timeout   float64 `json:"timeout"`   // per-request navigate timeout in seconds (default: BRIDGE_NAV_TIMEOUT)
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
 		jsonErr(w, 400, fmt.Errorf("decode: %w", err))
@@ -199,6 +200,15 @@ func (b *Bridge) handleNavigate(w http.ResponseWriter, r *http.Request) {
 		titleWait = time.Duration(req.WaitTitle * float64(time.Second))
 	}
 
+	// Per-request navigate timeout (default: global navigateTimeout, max 120s).
+	navTimeout := navigateTimeout
+	if req.Timeout > 0 {
+		if req.Timeout > 120 {
+			req.Timeout = 120
+		}
+		navTimeout = time.Duration(req.Timeout * float64(time.Second))
+	}
+
 	if req.NewTab {
 		newTargetID, newCtx, _, err := b.CreateTab(req.URL)
 		if err != nil {
@@ -206,7 +216,7 @@ func (b *Bridge) handleNavigate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		tCtx, tCancel := context.WithTimeout(newCtx, navigateTimeout)
+		tCtx, tCancel := context.WithTimeout(newCtx, navTimeout)
 		defer tCancel()
 		go cancelOnClientDone(r.Context(), tCancel)
 
@@ -224,7 +234,7 @@ func (b *Bridge) handleNavigate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tCtx, tCancel := context.WithTimeout(ctx, navigateTimeout)
+	tCtx, tCancel := context.WithTimeout(ctx, navTimeout)
 	defer tCancel()
 	go cancelOnClientDone(r.Context(), tCancel)
 
@@ -316,6 +326,21 @@ func (b *Bridge) handleTab(w http.ResponseWriter, r *http.Request) {
 
 	default:
 		jsonResp(w, 400, map[string]string{"error": "action must be 'new' or 'close'"})
+	}
+}
+
+// ── POST /shutdown ─────────────────────────────────────────
+
+func (b *Bridge) handleShutdown(shutdownFn func()) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		slog.Info("shutdown requested via API")
+		jsonResp(w, 200, map[string]any{"status": "shutting down"})
+
+		// Trigger shutdown in background so the response gets sent first.
+		go func() {
+			time.Sleep(100 * time.Millisecond)
+			shutdownFn()
+		}()
 	}
 }
 
