@@ -29,9 +29,9 @@ K1-K9 all fixed, multi-agent concurrency verified (MA1-MA8).
 - [ ] **`selector` param on `/snapshot`** — Scope a11y tree to CSS selector (`#content`, `article`). Eliminates nav/footer noise.
 - [ ] **Compact snapshot format** — Current nodes are verbose JSON objects. A flat format could halve tokens. Close the 3-4× gap with OpenClaw aria trees.
 
-### P2: Bugs
-- [ ] **K11 — File output ignores path** — `?output=file&path=X` ignores the `path` param, writes to default location.
-- [ ] **`blockImages` on CreateTab** — Global `BRIDGE_BLOCK_IMAGES` not applied when creating tabs, only on `/navigate`.
+### ~~P2: Bugs~~ — DONE
+- [x] **K11 — File output ignores path** — Fixed: `?output=file&path=X` now honors custom path, auto-creates parent dirs.
+- [x] **`blockImages` on CreateTab** — Fixed: Global `BRIDGE_BLOCK_IMAGES`/`BRIDGE_BLOCK_MEDIA` now applied on `CreateTab`.
 
 ### P3: Multi-Agent
 - [ ] **Tab locking** — `POST /tab/lock`, `POST /tab/unlock` with timeout-based deadlock prevention.
