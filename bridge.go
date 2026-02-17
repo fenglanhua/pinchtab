@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
 )
@@ -166,34 +165,29 @@ func (b *Bridge) CreateTab(url string) (string, context.Context, context.CancelF
 // CloseTab closes a tab by ID and cleans up caches.
 func (b *Bridge) CloseTab(tabID string) error {
 	b.mu.Lock()
-	entry, ok := b.tabs[tabID]
+	_, ok := b.tabs[tabID]
 	b.mu.Unlock()
 
-	// Close the tab via CDP first, using the existing context if available,
-	// otherwise create a temporary one.
-	if ok && entry.cancel != nil {
-		// Use the existing tab context to close the page.
-		if err := chromedp.Run(entry.ctx, page.Close()); err != nil {
-			// If the existing context fails, try a fresh one.
-			ctx, cancel := chromedp.NewContext(b.browserCtx,
-				chromedp.WithTargetID(target.ID(tabID)),
-			)
-			err2 := chromedp.Run(ctx, page.Close())
-			cancel()
-			if err2 != nil {
-				return fmt.Errorf("close tab: %w", err2)
+	// Use target.CloseTarget via the browser context — this is more reliable
+	// than page.Close() which requires an active page context and can hang
+	// if the tab is unresponsive or the context is stale.
+	closeCtx, closeCancel := context.WithTimeout(b.browserCtx, 5*time.Second)
+	defer closeCancel()
+
+	err := chromedp.Run(closeCtx,
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			if err := target.CloseTarget(target.ID(tabID)).Do(ctx); err != nil {
+				return fmt.Errorf("close tab: %w", err)
 			}
+			return nil
+		}),
+	)
+	if err != nil {
+		// If target wasn't tracked locally, it may already be gone — don't error.
+		if !ok {
+			return nil
 		}
-	} else {
-		// No tracked entry — try closing by target ID directly.
-		ctx, cancel := chromedp.NewContext(b.browserCtx,
-			chromedp.WithTargetID(target.ID(tabID)),
-		)
-		err := chromedp.Run(ctx, page.Close())
-		cancel()
-		if err != nil {
-			return fmt.Errorf("close tab: %w", err)
-		}
+		return fmt.Errorf("close tab: %w", err)
 	}
 
 	// Clean up local state after successful close.
