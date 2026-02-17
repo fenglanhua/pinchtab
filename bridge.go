@@ -98,6 +98,9 @@ func (b *Bridge) TabContext(tabID string) (context.Context, string, error) {
 
 	// Inject stealth script on newly attached tabs
 	b.injectStealth(ctx)
+	if noAnimations {
+		b.injectNoAnimations(ctx)
+	}
 
 	b.tabs[tabID] = &TabEntry{ctx: ctx, cancel: cancel}
 	return ctx, tabID, nil
@@ -171,6 +174,10 @@ func (b *Bridge) CreateTab(url string) (string, context.Context, context.CancelF
 
 	// Inject stealth script before navigation so it applies to the first page load
 	b.injectStealth(ctx)
+
+	if noAnimations {
+		b.injectNoAnimations(ctx)
+	}
 
 	// Apply global resource blocking on new tabs
 	if blockMedia {

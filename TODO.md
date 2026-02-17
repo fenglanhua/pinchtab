@@ -29,7 +29,7 @@ P2 (K11 file path, blockImages on CreateTab) — all resolved.
 ### P4: Quality of Life
 - [ ] **Headed mode testing** — Run Section 2 tests to validate non-headless.
 - [ ] **Ad blocking** — Basic tracker blocking for cleaner snapshots.
-- [ ] **CSS animation disabling** — Faster page loads, more consistent snapshots.
+- [x] **CSS animation disabling** — `BRIDGE_NO_ANIMATIONS` env + `?noAnimations=true` per-request.
 - [ ] **Randomized window sizes** — Avoid automation fingerprint.
 
 ### Minor

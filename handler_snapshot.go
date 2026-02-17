@@ -25,6 +25,7 @@ func (b *Bridge) handleSnapshot(w http.ResponseWriter, r *http.Request) {
 	outputPath := r.URL.Query().Get("path")        // custom file path for output=file
 	selector := r.URL.Query().Get("selector")      // CSS selector to scope snapshot
 	maxTokensStr := r.URL.Query().Get("maxTokens") // truncate output to ~N tokens
+	reqNoAnim := r.URL.Query().Get("noAnimations") == "true"
 	maxDepthStr := r.URL.Query().Get("depth")
 	maxDepth := -1
 	if maxDepthStr != "" {
@@ -48,6 +49,10 @@ func (b *Bridge) handleSnapshot(w http.ResponseWriter, r *http.Request) {
 	tCtx, tCancel := context.WithTimeout(ctx, actionTimeout)
 	defer tCancel()
 	go cancelOnClientDone(r.Context(), tCancel)
+
+	if reqNoAnim && !noAnimations {
+		disableAnimationsOnce(tCtx)
+	}
 
 	var rawResult json.RawMessage
 	if err := chromedp.Run(tCtx,

@@ -91,6 +91,7 @@ Pinchtab launches its own Chrome with a persistent profile at `~/.pinchtab/chrom
 - 🕵️ **Stealth mode** — patches `navigator.webdriver`, spoofs UA, hides automation flags
 - 💾 **Session persistence** — cookies, auth, tabs survive restarts
 - 🚫 **Image blocking** — skip image downloads for faster, leaner browsing (`BRIDGE_BLOCK_IMAGES` or per-request)
+- 🎬 **Animation disabling** — freeze CSS animations/transitions for consistent snapshots (`BRIDGE_NO_ANIMATIONS` or `?noAnimations=true`)
 - 📝 **Text extraction** — readability mode (strips nav/ads) or raw `innerText`
 - 🔄 **Smart diff** — `?diff=true` returns only changes since last snapshot
 - 📄 **Text format** — `?format=text` for indented tree (~40-60% fewer tokens than JSON)
@@ -110,6 +111,8 @@ Pinchtab launches its own Chrome with a persistent profile at `~/.pinchtab/chrom
 | `POST` | `/action` | Click, type, fill, press, focus, hover, select, scroll |
 | `POST` | `/evaluate` | Execute JavaScript |
 | `POST` | `/tab` | Open/close tabs |
+| `POST` | `/tab/lock` | Lock tab for exclusive agent access |
+| `POST` | `/tab/unlock` | Release tab lock |
 
 ### Query Parameters (snapshot)
 | Param | Description |
@@ -119,6 +122,20 @@ Pinchtab launches its own Chrome with a persistent profile at `~/.pinchtab/chrom
 | `depth=N` | Max tree depth |
 | `diff=true` | Return only added/changed/removed nodes since last snapshot |
 | `format=text` | Indented plain text instead of JSON (~40-60% fewer tokens) |
+| `format=compact` | One-line-per-node format (56-64% fewer tokens than JSON) |
+| `selector=CSS` | Scope tree to a CSS selector subtree (e.g. `?selector=main`) |
+| `maxTokens=N` | Truncate output to ~N tokens |
+| `noAnimations=true` | Disable CSS animations before capture |
+| `output=file` | Save snapshot to disk instead of returning |
+| `path=/custom/path` | Custom file path (with `output=file`) |
+
+### Query Parameters (screenshot)
+| Param | Description |
+|-------|-------------|
+| `tabId` | Target tab (default: first tab) |
+| `quality=N` | JPEG quality (default: 80) |
+| `noAnimations=true` | Disable CSS animations before capture |
+| `output=file` | Save screenshot to disk instead of returning |
 
 ### Query Parameters (text)
 | Param | Description |
@@ -140,6 +157,7 @@ All via environment variables:
 | `BRIDGE_NO_RESTORE` | `false` | Skip restoring tabs from previous session |
 | `BRIDGE_CHROME_VERSION` | `133.0.6943.98` | Chrome version in User-Agent strings (keep current to avoid detection) |
 | `BRIDGE_BLOCK_IMAGES` | `false` | Block image loading (faster, lower bandwidth) |
+| `BRIDGE_NO_ANIMATIONS` | `false` | Disable CSS animations/transitions globally |
 | `BRIDGE_TIMEOUT` | `15` | Action timeout (seconds) |
 | `BRIDGE_NAV_TIMEOUT` | `30` | Navigation timeout (seconds) |
 | `BRIDGE_CHROME_VERSION` | `133.0.6943.98` | Chrome UA version string |

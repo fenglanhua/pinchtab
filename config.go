@@ -59,6 +59,7 @@ var (
 	blockMedia       = os.Getenv("BRIDGE_BLOCK_MEDIA") == "true" // superset: images + fonts + CSS + video
 	chromeBinary     = os.Getenv("CHROME_BINARY")                // path to Chrome/Chromium binary
 	chromeExtraFlags = os.Getenv("CHROME_FLAGS")                 // extra flags (space-separated)
+	noAnimations     = os.Getenv("BRIDGE_NO_ANIMATIONS") == "true"
 	actionTimeout    = 15 * time.Second
 	navigateTimeout  = 30 * time.Second
 	shutdownTimeout  = 10 * time.Second

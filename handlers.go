@@ -58,6 +58,7 @@ func (b *Bridge) handleTabs(w http.ResponseWriter, r *http.Request) {
 func (b *Bridge) handleScreenshot(w http.ResponseWriter, r *http.Request) {
 	tabID := r.URL.Query().Get("tabId")
 	output := r.URL.Query().Get("output")
+	reqNoAnim := r.URL.Query().Get("noAnimations") == "true"
 
 	ctx, _, err := b.TabContext(tabID)
 	if err != nil {
@@ -68,6 +69,10 @@ func (b *Bridge) handleScreenshot(w http.ResponseWriter, r *http.Request) {
 	tCtx, tCancel := context.WithTimeout(ctx, actionTimeout)
 	defer tCancel()
 	go cancelOnClientDone(r.Context(), tCancel)
+
+	if reqNoAnim && !noAnimations {
+		disableAnimationsOnce(tCtx)
+	}
 
 	var buf []byte
 	quality := 80
