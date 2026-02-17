@@ -22,11 +22,11 @@ func TestMarkCleanExit_PatchesCrashed(t *testing.T) {
 	defer func() { profileDir = origProfileDir }()
 
 	prefsDir := filepath.Join(profileDir, "Default")
-	os.MkdirAll(prefsDir, 0755)
+	_ = os.MkdirAll(prefsDir, 0755)
 
 	prefsPath := filepath.Join(prefsDir, "Preferences")
 	content := `{"profile":{"exit_type":"Crashed","exited_cleanly":false}}`
-	os.WriteFile(prefsPath, []byte(content), 0644)
+	_ = os.WriteFile(prefsPath, []byte(content), 0644)
 
 	markCleanExit()
 
@@ -46,11 +46,11 @@ func TestMarkCleanExit_NoPatch(t *testing.T) {
 	defer func() { profileDir = origProfileDir }()
 
 	prefsDir := filepath.Join(profileDir, "Default")
-	os.MkdirAll(prefsDir, 0755)
+	_ = os.MkdirAll(prefsDir, 0755)
 
 	prefsPath := filepath.Join(prefsDir, "Preferences")
 	content := `{"profile":{"exit_type":"Normal","exited_cleanly":true}}`
-	os.WriteFile(prefsPath, []byte(content), 0644)
+	_ = os.WriteFile(prefsPath, []byte(content), 0644)
 
 	markCleanExit()
 
@@ -110,7 +110,7 @@ func TestRestoreState_EmptyTabs(t *testing.T) {
 
 	state := SessionState{Tabs: []TabState{}, SavedAt: "2026-02-17T07:00:00Z"}
 	data, _ := json.Marshal(state)
-	os.WriteFile(filepath.Join(stateDir, "sessions.json"), data, 0644)
+	_ = os.WriteFile(filepath.Join(stateDir, "sessions.json"), data, 0644)
 
 	b := newTestBridge()
 	// Should return early — no tabs to restore
@@ -122,7 +122,7 @@ func TestRestoreState_InvalidJSON(t *testing.T) {
 	stateDir = t.TempDir()
 	defer func() { stateDir = origStateDir }()
 
-	os.WriteFile(filepath.Join(stateDir, "sessions.json"), []byte("{broken"), 0644)
+	_ = os.WriteFile(filepath.Join(stateDir, "sessions.json"), []byte("{broken"), 0644)
 
 	b := newTestBridge()
 	// Should not panic on invalid JSON

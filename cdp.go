@@ -193,7 +193,7 @@ func setResourceBlocking(ctx context.Context, patterns []string) error {
 	return chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
 		// Enable Network domain (idempotent).
 		if err := chromedp.FromContext(ctx).Target.Execute(ctx, "Network.enable", nil, nil); err != nil {
-			return fmt.Errorf("Network.enable: %w", err)
+			return fmt.Errorf("network enable: %w", err)
 		}
 
 		if patterns == nil {

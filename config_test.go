@@ -68,12 +68,11 @@ func TestLoadConfig_FromFile(t *testing.T) {
 	// Create a temp config file
 	dir := t.TempDir()
 	configPath := dir + "/config.json"
-	os.WriteFile(configPath, []byte(`{"port":"7777"}`), 0644)
+	_ = os.WriteFile(configPath, []byte(`{"port":"7777"}`), 0644)
 
 	// Ensure env vars don't interfere
-	os.Unsetenv("BRIDGE_PORT")
-	os.Setenv("BRIDGE_CONFIG", configPath)
-	defer os.Unsetenv("BRIDGE_CONFIG")
+	t.Setenv("BRIDGE_PORT", "")
+	t.Setenv("BRIDGE_CONFIG", configPath)
 
 	loadConfig()
 	if port != "7777" {
@@ -87,13 +86,11 @@ func TestLoadConfig_EnvOverridesFile(t *testing.T) {
 
 	dir := t.TempDir()
 	configPath := dir + "/config.json"
-	os.WriteFile(configPath, []byte(`{"port":"7777"}`), 0644)
+	_ = os.WriteFile(configPath, []byte(`{"port":"7777"}`), 0644)
 
 	// Set BRIDGE_PORT env — loadConfig should NOT override port from file
-	os.Setenv("BRIDGE_CONFIG", configPath)
-	os.Setenv("BRIDGE_PORT", "8888")
-	defer os.Unsetenv("BRIDGE_CONFIG")
-	defer os.Unsetenv("BRIDGE_PORT")
+	t.Setenv("BRIDGE_CONFIG", configPath)
+	t.Setenv("BRIDGE_PORT", "8888")
 
 	// Simulate what happens: port was set at init from env, so set it manually
 	port = "8888"
@@ -107,7 +104,7 @@ func TestLoadConfig_EnvOverridesFile(t *testing.T) {
 func TestLoadConfig_InvalidJSON(t *testing.T) {
 	dir := t.TempDir()
 	configPath := dir + "/config.json"
-	os.WriteFile(configPath, []byte("{broken json!!!"), 0644)
+	_ = os.WriteFile(configPath, []byte("{broken json!!!"), 0644)
 
 	// Save and restore global state
 	origPort := port
