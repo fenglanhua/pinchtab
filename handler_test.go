@@ -234,6 +234,74 @@ func TestHandleSetCookies_MissingURL(t *testing.T) {
 	}
 }
 
+// ── Health & Tabs (Section 1.1, 1.6) ─────────────────────
+
+func TestHandleHealth_NoBrowser(t *testing.T) {
+	b := newTestBridge()
+	req := httptest.NewRequest("GET", "/health", nil)
+	w := httptest.NewRecorder()
+	b.handleHealth(w, req)
+
+	// No browser → status "disconnected" but still 200
+	if w.Code != 200 {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "disconnected") {
+		t.Errorf("expected 'disconnected' in body, got %s", body)
+	}
+}
+
+func TestHandleTabs_NoBrowser(t *testing.T) {
+	b := newTestBridge()
+	req := httptest.NewRequest("GET", "/tabs", nil)
+	w := httptest.NewRecorder()
+	b.handleTabs(w, req)
+
+	// No browser connection → 500
+	if w.Code != 500 {
+		t.Errorf("expected 500, got %d", w.Code)
+	}
+}
+
+func TestHandleScreenshot_QualityParam(t *testing.T) {
+	b := newTestBridge()
+	// Quality param is parsed but no tab → 404; test it doesn't panic
+	req := httptest.NewRequest("GET", "/screenshot?quality=50", nil)
+	w := httptest.NewRecorder()
+	b.handleScreenshot(w, req)
+
+	if w.Code != 404 {
+		t.Errorf("expected 404 (no tab), got %d", w.Code)
+	}
+}
+
+func TestHandleScreenshot_InvalidQuality(t *testing.T) {
+	b := newTestBridge()
+	req := httptest.NewRequest("GET", "/screenshot?quality=abc", nil)
+	w := httptest.NewRecorder()
+	b.handleScreenshot(w, req)
+
+	// Invalid quality falls back to default, still 404 (no tab)
+	if w.Code != 404 {
+		t.Errorf("expected 404, got %d", w.Code)
+	}
+}
+
+func TestHandleNavigate_InvalidURL(t *testing.T) {
+	b := newTestBridge()
+	body := `{"url": "not-a-url"}`
+	req := httptest.NewRequest("POST", "/navigate", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	b.handleNavigate(w, req)
+
+	// No tabs → 404, but the invalid URL is accepted at parse level
+	// (validation happens at Chrome level)
+	if w.Code != 404 {
+		t.Errorf("expected 404 (no tab), got %d", w.Code)
+	}
+}
+
 // ── Navigate edge cases ──────────────────────────────────
 
 func TestHandleNavigate_WaitTitleClamp(t *testing.T) {

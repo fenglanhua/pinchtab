@@ -14,7 +14,7 @@
 
 | # | Scenario | Steps | Expected |
 |---|----------|-------|----------|
-| H1 | Health check | `GET /health` | 200, `{"status":"ok"}` |
+| H1 | Health check | `GET /health` | 200, `{"status":"ok"}` | ✅ Unit test (error path) |
 | H2 | Startup headless | `BRIDGE_HEADLESS=true ./pinchtab` | Launches, binds port, Chrome not visible |
 | H3 | Startup headed | `./pinchtab` | Chrome window opens, visible |
 | H4 | Custom port | `BRIDGE_PORT=9999 ./pinchtab` | Binds to 9999 |
