@@ -176,9 +176,10 @@ func (b *Bridge) handleText(w http.ResponseWriter, r *http.Request) {
 
 func (b *Bridge) handleNavigate(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		TabID  string `json:"tabId"`
-		URL    string `json:"url"`
-		NewTab bool   `json:"newTab"`
+		TabID     string  `json:"tabId"`
+		URL       string  `json:"url"`
+		NewTab    bool    `json:"newTab"`
+		WaitTitle float64 `json:"waitTitle"` // seconds to wait for title (default 2, max 30)
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
 		jsonErr(w, 400, fmt.Errorf("decode: %w", err))
@@ -187,6 +188,15 @@ func (b *Bridge) handleNavigate(w http.ResponseWriter, r *http.Request) {
 	if req.URL == "" {
 		jsonResp(w, 400, map[string]string{"error": "url required"})
 		return
+	}
+
+	// Compute title wait duration (default 2s, max 30s).
+	titleWait := time.Duration(0)
+	if req.WaitTitle > 0 {
+		if req.WaitTitle > 30 {
+			req.WaitTitle = 30
+		}
+		titleWait = time.Duration(req.WaitTitle * float64(time.Second))
 	}
 
 	if req.NewTab {
@@ -202,7 +212,7 @@ func (b *Bridge) handleNavigate(w http.ResponseWriter, r *http.Request) {
 
 		var url, title string
 		_ = chromedp.Run(tCtx, chromedp.Location(&url))
-		title = waitForTitle(tCtx)
+		title = waitForTitle(tCtx, titleWait)
 
 		jsonResp(w, 200, map[string]any{"tabId": newTargetID, "url": url, "title": title})
 		return
@@ -227,7 +237,7 @@ func (b *Bridge) handleNavigate(w http.ResponseWriter, r *http.Request) {
 
 	var url string
 	_ = chromedp.Run(tCtx, chromedp.Location(&url))
-	title := waitForTitle(tCtx)
+	title := waitForTitle(tCtx, titleWait)
 
 	jsonResp(w, 200, map[string]any{"url": url, "title": title})
 }

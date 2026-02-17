@@ -60,10 +60,13 @@ func navigatePage(ctx context.Context, url string) error {
 	)
 }
 
-// waitForTitle polls document.title for up to 2 seconds, returning the first
-// non-empty value or "" on timeout.
-func waitForTitle(ctx context.Context) string {
-	deadline := time.Now().Add(2 * time.Second)
+// waitForTitle polls document.title for up to the given duration, returning
+// the first non-empty value or "" on timeout. Pass 0 for the default (2s).
+func waitForTitle(ctx context.Context, wait time.Duration) string {
+	if wait <= 0 {
+		wait = 2 * time.Second
+	}
+	deadline := time.Now().Add(wait)
 	for time.Now().Before(deadline) {
 		var title string
 		if err := chromedp.Run(ctx, chromedp.Title(&title)); err == nil && title != "" {

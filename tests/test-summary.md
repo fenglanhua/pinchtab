@@ -1,7 +1,7 @@
 # Pinchtab Test Summary
 
-**Last updated:** 2026-02-17 01:00 UTC
-**Runs analyzed:** bosch-test-00.md
+**Last updated:** 2026-02-17 03:00 UTC
+**Runs analyzed:** bosch-test-00.md, bosch-test-02.md
 
 ---
 
@@ -9,16 +9,20 @@
 
 | Area | Status | Notes |
 |------|--------|-------|
-| Health/Startup | ✅ Pass | Headless startup, health endpoint working |
-| Navigation | ✅ Pass | 5/5 sites navigated successfully (311-967ms) |
-| Snapshot | ✅ Pass | JSON valid on all sites, refs assigned correctly |
-| Interactive filter | ✅ Pass | Returns subset of nodes |
-| Text extraction | ✅ Pass | All sites return text |
-| Actions (error handling) | ✅ Pass | Unknown kind + bad ref both return clear errors |
-| Active tab tracking (K1) | ✅ Pass | Fixed in earlier commits |
-| Tab close (K2) | 🔧 Fix attempted | Was returning "No target with given id found" — fix committed hour 01 |
+| Health/Startup | ✅ Pass | Both runs |
+| Navigation | ✅ Pass | All sites, 70-967ms range |
+| Snapshot | ✅ Pass | All formats (JSON, text, YAML, diff), refs correct |
+| Interactive filter | ✅ Pass | Properly filters to actionable elements |
+| Text extraction | ✅ Pass | Readability + raw modes working |
+| Actions | ✅ Pass | Click, press, scroll, CSS selector all work. Type/fill untested (no form page) |
+| Error handling | ✅ Pass | Bad JSON, missing params, unknown kinds, bad refs — all return clean errors |
+| Active tab tracking (K1) | ✅ Fixed | Confirmed in hour 00 run |
+| Tab close (K2) | 🔧 Partial | Hour 01 fix applied. Hour 02 test script had bug (empty tabId). Needs re-test with valid tabId |
+| SPA title (K3) | 🔧 Improved | Added `waitTitle` param to navigate (hour 03) — agents can opt into longer waits for SPAs |
 
-## Performance Metrics (Hour 00 Run)
+## Performance Metrics
+
+### Hour 00 — Multi-Site Benchmark
 
 | Site | Nav (ms) | Snap (ms) | Snap (~tok) | Nodes | Text (ms) | Text (~tok) |
 |------|----------|-----------|-------------|-------|-----------|-------------|
@@ -28,37 +32,63 @@
 | finance.yahoo.com | 498 | 26 | 1,529 | 68 | 22 | 769 |
 | stackoverflow.com | 967 | 84 | 16,376 | 764 | 24 | 5,905 |
 
-### Averages
-- **Navigate:** 672ms
-- **Snapshot:** 55ms
-- **Text:** 24ms
+### Hour 02 — Endpoint Averages (example.com focused)
 
-## Performance Trends
+| Endpoint | Avg (ms) | Avg Size | Avg Tokens |
+|----------|----------|----------|------------|
+| GET /health | 28 | 33B | 8 |
+| POST /navigate | 97 | 67B | 17 |
+| GET /snapshot | 25 | 389B | 97 |
+| GET /text | 24 | 194B | 48 |
+| POST /action | 28 | 44B | 11 |
+| GET /tabs | 21 | 230B | 57 |
 
-Only one run so far (hour 00). Will track trends as more runs accumulate.
+### Performance Trends
 
-| Metric | Hour 00 | Trend |
-|--------|---------|-------|
-| Avg navigate | 672ms | baseline |
-| Avg snapshot | 55ms | baseline |
-| Avg text | 24ms | baseline |
-| Max snapshot tokens | 29,401 | baseline |
+| Metric | Hour 00 | Hour 02 | Trend |
+|--------|---------|---------|-------|
+| Avg navigate (real sites) | 672ms | 354ms (example.com only) | — (different sites) |
+| Snapshot (example.com) | 32ms | 38ms | Stable |
+| Text (example.com) | 23ms | 24ms | Stable |
+| Snapshot formats | JSON only | JSON+text+YAML+diff | All fast (<25ms) |
+
+Key observations:
+- Snapshot latency scales with page complexity: 26ms (68 nodes) → 91ms (1482 nodes)
+- Text extraction is consistently fast regardless of page size (~23ms)
+- Navigate time dominated by network/page load, not pinchtab overhead
+
+## Test Coverage
+
+| Section | Tested | Pass | Fail | Skip |
+|---------|--------|------|------|------|
+| 1.1 Health | 2/7 | 2 | 0 | 0 |
+| 1.2 Navigation | 5/8 | 5 | 0 | 0 |
+| 1.3 Snapshot | 7/12 | 7 | 0 | 0 |
+| 1.4 Text | 2/5 | 2 | 0 | 0 |
+| 1.5 Actions | 7/17 | 7 | 0 | 0 |
+| 1.6 Tabs | 5/6 | 4 | 1 | 0 |
+| 1.7-1.12 | 0 | — | — | — |
+
+**Total: 28/55 core tests executed, 27 pass, 1 fail (TB3 — test script issue, not pinchtab bug)**
 
 ## Known Issues Status
 
-| # | Issue | Status |
-|---|-------|--------|
-| K1 | Active tab tracking | ✅ Fixed |
-| K2 | Tab close error | 🔧 Fix attempted (hour 01) — reorder: close CDP target before canceling context |
-| K3 | x.com empty title | Open (SPA limitation) |
-| K4 | Chrome flag warning | Open (cosmetic) |
-| K5-K9 | Stealth issues | ✅ All fixed |
+| # | Issue | Severity | Status | Notes |
+|---|-------|----------|--------|-------|
+| K1 | Active tab tracking | 🔴 P0 | ✅ FIXED | Confirmed working hour 00 |
+| K2 | Tab close hangs | 🟡 P1 | 🔧 FIX APPLIED | Hour 01 fix (close via existing ctx). Needs re-test |
+| K3 | x.com title empty | 🟢 P2 | 🔧 IMPROVED | Added `waitTitle` param (hour 03) — agents can wait up to 30s |
+| K4 | Chrome flag warning | 🟢 P2 | OPEN | Cosmetic, Chrome 144+ deprecation |
+| K5-K9 | Stealth issues | — | ✅ ALL FIXED | Mario's fixes (CDP overrides) |
+| NEW | Profile dir hang | 🟡 P1 | OPEN | Default profile (~/.pinchtab/chrome-profile) can hang Chrome launch. Fresh profiles work. Possible lock file or corruption |
 
-## Test Coverage Gaps
+## Release Readiness (v1.0)
 
-- Sections 1.7-1.12 (screenshots, eval, cookies, stealth, config, persistence) not yet tested by autorun
-- Multi-agent scenarios (Section 3) untested
-- Integration tests (Section 4) pass in CI but not in autorun
+**P0 blockers:** K1 ✅, K2 🔧 (needs verification), zero crashes ✅
+**Unit tests:** 54 pass ✅
+**Integration tests:** 6 pass, 1 skip (headless), 1 skip (headed-only) ✅
+
+Remaining for v1.0: verify K2 fix, expand autorun test coverage to sections 1.7+, investigate profile hang.
 
 ---
 *Generated by Bosch autorun*

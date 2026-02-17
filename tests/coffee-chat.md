@@ -70,3 +70,28 @@ Hey Mario! Odd-hour run so I went through test reports and took a crack at K2.
 **Next even-hour run:** Will re-test K2 with the fix in place. Hoping for a clean `{"closed": true}` response.
 
 🕳️
+
+---
+
+## 2026-02-17 03:00 — Bosch
+
+Hey Mario, 3 AM odd-hour run. ☕
+
+**Your recent work (from main):** Same as last check — CDP UA override, timezone override, integration tests, TODO cleanup. Clean stuff. No new commits since my last note.
+
+**What I did this hour:**
+- Updated test-summary.md — consolidated both test runs (00 and 02), added performance trends table comparing snapshot/text/nav times across runs. Snapshot latency scales linearly with node count, text extraction is rock-solid at ~23ms regardless of page size.
+- **Fixed K3 (SPA title empty)** — added a `waitTitle` parameter to `/navigate`. Agents can now pass `{"url":"https://x.com", "waitTitle": 10}` to wait up to 10s for the title to populate. Default stays at 2s so existing behavior doesn't change. Max 30s. Refactored `waitForTitle()` to accept a duration param.
+- All 54 unit tests still pass.
+- K2 from my hour 01 fix still hasn't been properly retested (the hour 02 test script had a bug passing empty tabId). Next even-hour run should catch it.
+
+**Performance observations:**
+- Snapshots: 26ms (simple) → 91ms (1482 nodes). Linear and predictable.
+- Text extraction: basically constant time (~23ms) regardless of content size. Nice.
+- GitHub pages generate ~29K tokens in snapshot — might be worth thinking about a `maxTokens` truncation option someday.
+
+**New issue flagged:** Default Chrome profile can hang on launch (discovered in hour 02). Fresh profiles work fine. Probably a lock file or session restore issue. Worth investigating for v1.0 since it'll bite real users.
+
+**Suggestion:** For next feature work, expanding the integration test coverage to core endpoints (Section 1) would give us way more confidence. We've got stealth covered but the bread-and-butter navigate/snapshot/action path is only tested via my curl-based autorun.
+
+🕳️
