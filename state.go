@@ -41,6 +41,28 @@ func markCleanExit() {
 	}
 }
 
+// wasUncleanExit checks if the previous Chrome session exited uncleanly.
+// Returns true if Preferences contains exit_type:"Crashed".
+func wasUncleanExit() bool {
+	prefsPath := filepath.Join(profileDir, "Default", "Preferences")
+	data, err := os.ReadFile(prefsPath)
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(data), `"exit_type":"Crashed"`)
+}
+
+// clearChromeSessions removes Chrome's internal session restore data
+// (the Sessions/ folder that stores tabs to reopen after a crash).
+func clearChromeSessions() {
+	sessionsDir := filepath.Join(profileDir, "Default", "Sessions")
+	if err := os.RemoveAll(sessionsDir); err != nil {
+		slog.Warn("failed to clear Chrome sessions dir", "err", err)
+	} else {
+		slog.Info("cleared Chrome sessions dir (prevent tab restore hang)")
+	}
+}
+
 // SaveState writes all open tab URLs to sessions.json.
 func (b *Bridge) SaveState() {
 	targets, err := b.ListTargets()

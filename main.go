@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/page"
@@ -18,6 +19,10 @@ import (
 
 // version is set by goreleaser via ldflags
 var version = "dev"
+
+// chromeStartTimeout is the maximum time to wait for Chrome to connect via CDP.
+// If exceeded, Pinchtab clears session data and retries once.
+const chromeStartTimeout = 15 * time.Second
 
 var bridge Bridge
 
@@ -42,6 +47,7 @@ func main() {
 	}
 
 	var allocCancel context.CancelFunc
+	var chromeOpts []chromedp.ExecAllocatorOption // stored for retry
 
 	if cdpURL != "" {
 		slog.Info("connecting to Chrome", "url", cdpURL)
@@ -60,9 +66,16 @@ func main() {
 			}
 		}
 
+		// Detect unclean previous exit and clear Chrome's session restore data
+		// to prevent hanging on restored tabs that fail to load.
+		if wasUncleanExit() {
+			slog.Warn("previous session exited uncleanly, clearing Chrome session restore data")
+			clearChromeSessions()
+		}
+
 		slog.Info("launching Chrome", "profile", profileDir, "headless", headless)
 
-		opts := []chromedp.ExecAllocatorOption{
+		chromeOpts = []chromedp.ExecAllocatorOption{
 			// Profile & basics
 			chromedp.UserDataDir(profileDir),
 			chromedp.NoFirstRun,
@@ -70,8 +83,6 @@ func main() {
 
 			// Advanced stealth: hide automation indicators
 			chromedp.Flag("exclude-switches", "enable-automation"),
-			// Note: --disable-blink-features=AutomationControlled removed (deprecated Chrome 144+).
-			// Stealth is handled via CDP navigator.webdriver override instead.
 			chromedp.Flag("disable-infobars", true),
 			chromedp.Flag("disable-dev-shm-usage", true),
 			chromedp.Flag("disable-renderer-backgrounding", true),
@@ -82,7 +93,7 @@ func main() {
 			chromedp.Flag("disable-hang-monitor", true),
 			chromedp.Flag("disable-prompt-on-repost", true),
 			chromedp.Flag("disable-sync", true),
-			chromedp.Flag("disable-web-security", false), // Keep security enabled for realistic behavior
+			chromedp.Flag("disable-web-security", false),
 
 			// Performance & networking
 			chromedp.Flag("disable-background-networking", false),
@@ -98,40 +109,88 @@ func main() {
 			// Random seed for consistent behavior across runs
 			chromedp.Flag("js-flags", "--random-seed=1157259157"),
 
-			// Identity - more realistic user agent with proper versioning
+			// Identity
 			chromedp.UserAgent(fmt.Sprintf("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/%s Safari/537.36", chromeVersion)),
-			chromedp.WindowSize(1366, 768), // More common resolution
+			chromedp.WindowSize(1366, 768),
 		}
 
 		if headless {
-			opts = append(opts, chromedp.Headless)
+			chromeOpts = append(chromeOpts, chromedp.Headless)
 		} else {
-			opts = append(opts, chromedp.Flag("headless", false))
+			chromeOpts = append(chromeOpts, chromedp.Flag("headless", false))
 		}
 
 		markCleanExit()
-		bridge.allocCtx, allocCancel = chromedp.NewExecAllocator(context.Background(), opts...)
+		bridge.allocCtx, allocCancel = chromedp.NewExecAllocator(context.Background(), chromeOpts...)
 	}
-	// Safety net: defers ensure Chrome cleanup even if doShutdown doesn't fire.
-	// doShutdown also calls these (sync.Once ensures no double-close issue).
 	defer allocCancel()
 
-	browserCtx, browserCancel := chromedp.NewContext(bridge.allocCtx)
-	defer browserCancel()
-
-	// Inject stealth script with a session-stable seed (stays constant across page loads)
+	// Prepare stealth script
 	stealthSeed := rand.Intn(1000000000)
 	seededScript := fmt.Sprintf("var __pinchtab_seed = %d;\n", stealthSeed) + stealthScript
-	bridge.stealthScript = seededScript // store for new tab injection
-	if err := chromedp.Run(browserCtx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			_, err := page.AddScriptToEvaluateOnNewDocument(seededScript).Do(ctx)
-			return err
-		}),
-	); err != nil {
-		slog.Error("cannot start Chrome", "err", err)
-		os.Exit(1)
+	bridge.stealthScript = seededScript
+
+	// startChrome connects to Chrome with a timeout. Returns browserCtx and cancel,
+	// or an error if Chrome doesn't respond within chromeStartTimeout.
+	startChrome := func() (context.Context, context.CancelFunc, error) {
+		bCtx, bCancel := chromedp.NewContext(bridge.allocCtx)
+
+		startCtx, startDone := context.WithTimeout(context.Background(), chromeStartTimeout)
+		defer startDone()
+
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- chromedp.Run(bCtx,
+				chromedp.ActionFunc(func(ctx context.Context) error {
+					_, err := page.AddScriptToEvaluateOnNewDocument(seededScript).Do(ctx)
+					return err
+				}),
+			)
+		}()
+
+		select {
+		case err := <-errCh:
+			if err != nil {
+				bCancel()
+				return nil, nil, err
+			}
+			return bCtx, bCancel, nil
+		case <-startCtx.Done():
+			bCancel()
+			return nil, nil, fmt.Errorf("timed out after %s", chromeStartTimeout)
+		}
 	}
+
+	browserCtx, browserCancel, err := startChrome()
+	if err != nil {
+		slog.Warn("Chrome startup failed, clearing sessions and retrying once", "err", err)
+
+		// Kill the hung Chrome process and clean up.
+		allocCancel()
+		clearChromeSessions()
+		markCleanExit()
+
+		// Re-create allocator for retry.
+		if cdpURL != "" {
+			bridge.allocCtx, allocCancel = chromedp.NewRemoteAllocator(context.Background(), cdpURL)
+		} else {
+			bridge.allocCtx, allocCancel = chromedp.NewExecAllocator(context.Background(), chromeOpts...)
+		}
+
+		// Retry once.
+		browserCtx, browserCancel, err = startChrome()
+		if err != nil {
+			slog.Error("Chrome failed to start after retry",
+				"err", err,
+				"hint", "try BRIDGE_NO_RESTORE=true or delete your profile directory",
+				"profile", profileDir,
+			)
+			allocCancel()
+			os.Exit(1)
+		}
+		slog.Info("Chrome started on retry")
+	}
+	defer browserCancel()
 
 	// CDP-level timezone override (more reliable than JS-only approach)
 	if timezone != "" {
@@ -201,7 +260,6 @@ func main() {
 			}
 
 			// Explicitly close Chrome by canceling the browser and allocator contexts.
-			// This sends CDP Browser.close and kills the Chrome process.
 			browserCancel()
 			allocCancel()
 			slog.Info("chrome closed")
@@ -225,6 +283,26 @@ func main() {
 	} else {
 		slog.Info("auth disabled (set BRIDGE_TOKEN to enable)")
 	}
+
+	// Startup self-check: verify the server can respond within 5s.
+	go func() {
+		time.Sleep(500 * time.Millisecond) // let ListenAndServe bind
+		client := &http.Client{Timeout: 5 * time.Second}
+		resp, err := client.Get(fmt.Sprintf("http://localhost:%s/health", port))
+		if err != nil {
+			slog.Error("startup health check failed",
+				"err", err,
+				"hint", "try BRIDGE_NO_RESTORE=true or delete your profile directory",
+			)
+			return
+		}
+		resp.Body.Close()
+		if resp.StatusCode == http.StatusOK {
+			slog.Info("startup health check passed")
+		} else {
+			slog.Warn("startup health check unexpected status", "status", resp.StatusCode)
+		}
+	}()
 
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		slog.Error("server", "err", err)
