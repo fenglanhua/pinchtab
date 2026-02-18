@@ -1172,14 +1172,13 @@ function renderMainCard(tabCount) {
         <span class="inst-badge running">running :${location.port || '9867'}</span>
       </div>
       <div class="inst-body">
-        <div class="inst-row"><span class="label">Mode</span><span class="value">${document.title.includes('headed') ? '🖥️ Headed' : '🔲 Current instance'}</span></div>
         <div class="inst-row"><span class="label">Tabs</span><span class="value">${tabCount}</span></div>
         <div class="inst-row"><span class="label">Port</span><span class="value">${location.port || '9867'}</span></div>
       </div>
       <div class="inst-actions">
         <button onclick="switchView('live')">📺 Live</button>
-        <button onclick="switchView('feed')">🤖 Agents</button>
-        <button onclick="switchView('settings')">⚙️ Settings</button>
+        <button onclick="resetProfile('main')">🔄 Reset</button>
+        <button onclick="viewAnalytics('main')">📊 Analytics</button>
       </div>
     </div>
   ` + "`" + `;
@@ -1208,10 +1207,11 @@ function renderProfileCard(name, sizeMB, source, inst) {
         ${isRunning
           ? '<button onclick="viewInstanceLive(\'' + esc(inst.id) + '\', \'' + esc(inst.port) + '\')">📺 Live</button>'
             + '<button onclick="viewInstanceLogs(\'' + esc(inst.id) + '\')">📄 Logs</button>'
-            + '<button onclick="openInstanceDirect(\'' + esc(inst.port) + '\')">🔗 Open</button>'
+            + '<button onclick="resetProfile(\'' + esc(name) + '\')">🔄 Reset</button>'
             + '<button class="danger" onclick="stopInstance(\'' + esc(inst.id) + '\')">⏹ Stop</button>'
           : '<button onclick="launchProfile(\'' + esc(name) + '\')">🚀 Launch</button>'
-            + '<button onclick="showProfileModal(\'' + esc(name) + '\')">⚙️ Manage</button>'
+            + '<button onclick="resetProfile(\'' + esc(name) + '\')">🔄 Reset</button>'
+            + '<button onclick="viewAnalytics(\'' + esc(name) + '\')">📊 Analytics</button>'
             + '<button class="danger" onclick="deleteProfile(\'' + esc(name) + '\')">🗑️ Delete</button>'
         }
       </div>
