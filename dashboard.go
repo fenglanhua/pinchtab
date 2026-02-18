@@ -725,7 +725,7 @@ const dashboardHTML = `<!DOCTYPE html>
   <div class="status"><span class="dot"></span>Live</div>
   <div class="view-toggle">
     <button class="view-btn active" data-view="feed" onclick="switchView('feed')">🤖 Agents</button>
-    <button class="view-btn" data-view="instances" onclick="switchView('instances')">🖥️ Instances</button>
+    <button class="view-btn" data-view="profiles" onclick="switchView('profiles')">📁 Profiles</button>
     <button class="view-btn" data-view="live" onclick="switchView('live')">📺 Live</button>
     <button class="view-btn" data-view="settings" onclick="switchView('settings')">⚙️</button>
   </div>
@@ -740,24 +740,37 @@ const dashboardHTML = `<!DOCTYPE html>
   <div id="screencast-grid" class="screencast-grid"></div>
 </div>
 
-<!-- Instances view -->
-<div id="instances-view" class="instances-view" style="display:none">
+<!-- Profiles view -->
+<div id="profiles-view" class="instances-view" style="display:none">
   <div class="inst-toolbar">
-    <button onclick="showLaunchModal()" class="launch-btn">+ Launch Instance</button>
-    <button onclick="loadInstances()" class="refresh-btn">↻ Refresh</button>
-    <div id="profiles-bar" style="display:flex;gap:8px;margin-left:16px;overflow-x:auto"></div>
+    <button onclick="showCreateProfileModal()" class="launch-btn">+ New Profile</button>
+    <button onclick="loadProfiles()" class="refresh-btn">↻ Refresh</button>
   </div>
-  <div id="instances-grid" class="instances-grid">
-    <div class="empty-state"><div class="crab">🦀</div>No instances running.<br>Launch one to get started.</div>
+  <div id="profiles-grid" class="instances-grid">
+    <div class="empty-state"><div class="crab">🦀</div>No profiles yet.<br>Click <b>+ New Profile</b> to create one.</div>
   </div>
 </div>
 
-<!-- Launch modal -->
+<!-- Create profile modal -->
+<div class="modal-overlay" id="create-profile-modal">
+  <div class="modal">
+    <h3>📁 New Profile</h3>
+    <label style="color:#888;font-size:12px;display:block;margin-bottom:4px">Name</label>
+    <input id="create-name" placeholder="e.g. personal, work, scraping" />
+    <label style="color:#888;font-size:12px;display:block;margin-bottom:4px">Import from (optional — Chrome user data path)</label>
+    <input id="create-source" placeholder="e.g. /Users/you/Library/Application Support/Google/Chrome" />
+    <div class="btn-row" style="margin-top:16px">
+      <button class="secondary" onclick="closeCreateProfileModal()">Cancel</button>
+      <button onclick="doCreateProfile()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Launch profile modal -->
 <div class="modal-overlay" id="launch-modal">
   <div class="modal">
-    <h3>🦀 Launch Instance</h3>
-    <label style="color:#888;font-size:12px;display:block;margin-bottom:4px">Profile Name</label>
-    <input id="launch-name" placeholder="e.g. personal, work, scraping" />
+    <h3>🚀 Launch Profile</h3>
+    <input id="launch-name" type="hidden" />
     <label style="color:#888;font-size:12px;display:block;margin-bottom:4px">Port</label>
     <input id="launch-port" placeholder="e.g. 9868" />
     <label style="color:#888;font-size:12px;display:flex;align-items:center;gap:8px;margin-bottom:12px">
@@ -1098,76 +1111,131 @@ function switchView(view) {
   document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
   document.querySelector('[data-view="'+view+'"]').classList.add('active');
   document.getElementById('feed-view').style.display = view === 'feed' ? 'flex' : 'none';
-  document.getElementById('instances-view').style.display = view === 'instances' ? 'flex' : 'none';
+  document.getElementById('profiles-view').style.display = view === 'profiles' ? 'flex' : 'none';
   document.getElementById('live-view').style.display = view === 'live' ? 'flex' : 'none';
   document.getElementById('settings-view').style.display = view === 'settings' ? 'block' : 'none';
   if (view === 'live') refreshTabs();
-  if (view === 'instances') loadInstances();
+  if (view === 'profiles') loadProfiles();
   if (view === 'settings') loadSettings();
 }
 
 // ---------------------------------------------------------------------------
 // Instances
 // ---------------------------------------------------------------------------
-async function loadInstances() {
-  // Load profiles into toolbar
+async function loadProfiles() {
   try {
-    const pres = await fetch('/profiles');
-    const profiles = await pres.json();
-    const bar = document.getElementById('profiles-bar');
-    if (profiles && profiles.length > 0) {
-      bar.innerHTML = profiles.map(p => ` + "`" + `
-        <div class="profile-chip" onclick="showProfileModal('${esc(p.name)}')">
-          <span class="pname">${esc(p.name)}</span>
-          <span class="psize">${p.sizeMB.toFixed(0)}MB</span>
-          <span class="psource">${p.source}</span>
-        </div>
-      ` + "`" + `).join('');
-    } else {
-      bar.innerHTML = '';
-    }
-  } catch(e) {}
+    // Fetch both profiles and running instances
+    const [profRes, instRes] = await Promise.all([
+      fetch('/profiles'),
+      fetch('/instances')
+    ]);
+    const profiles = await profRes.json() || [];
+    const instances = await instRes.json() || [];
 
-  try {
-    const res = await fetch('/instances');
-    const instances = await res.json();
-    const grid = document.getElementById('instances-grid');
+    // Map running instances by profile name
+    const running = {};
+    instances.forEach(inst => { if (inst.status === 'running') running[inst.name] = inst; });
 
-    if (!instances || instances.length === 0) {
-      grid.innerHTML = '<div class="empty-state"><div class="crab">🦀</div>No instances running.<br>Click <b>+ Launch Instance</b> to start one.</div>';
+    // Also include instances for profiles we don't have on disk yet
+    const profileNames = new Set(profiles.map(p => p.name));
+    const extraInstances = instances.filter(i => !profileNames.has(i.name));
+
+    const grid = document.getElementById('profiles-grid');
+
+    if (profiles.length === 0 && instances.length === 0) {
+      grid.innerHTML = '<div class="empty-state"><div class="crab">🦀</div>No profiles yet.<br>Click <b>+ New Profile</b> to create one.</div>';
       return;
     }
 
-    grid.innerHTML = instances.map(inst => ` + "`" + `
-      <div class="inst-card">
-        <div class="inst-header">
-          <span class="inst-name">${esc(inst.name)}</span>
-          <span class="inst-badge ${inst.status}">${inst.status}</span>
-        </div>
-        <div class="inst-body">
-          <div class="inst-row"><span class="label">Port</span><span class="value">${esc(inst.port)}</span></div>
-          <div class="inst-row"><span class="label">Mode</span><span class="value">${inst.headless ? '🔲 Headless' : '🖥️ Headed'}</span></div>
-          <div class="inst-row"><span class="label">Tabs</span><span class="value">${inst.tabCount}</span></div>
-          <div class="inst-row"><span class="label">PID</span><span class="value">${inst.pid || '—'}</span></div>
-          <div class="inst-row"><span class="label">Profile</span><span class="value" style="font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis">${esc(inst.profile)}</span></div>
-          ${inst.error ? '<div class="inst-row"><span class="label">Error</span><span class="value" style="color:#f87171">' + esc(inst.error) + '</span></div>' : ''}
-        </div>
-        <div class="inst-actions">
-          <button onclick="viewInstanceLive('${esc(inst.id)}', '${esc(inst.port)}')">📺 Live</button>
-          <button onclick="viewInstanceLogs('${esc(inst.id)}')">📄 Logs</button>
-          <button onclick="openInstanceDirect('${esc(inst.port)}')">🔗 Open</button>
-          ${inst.status === 'running' ? '<button class="danger" onclick="stopInstance(\'' + esc(inst.id) + '\')">⏹ Stop</button>' : ''}
-        </div>
-      </div>
-    ` + "`" + `).join('');
+    const cards = profiles.map(p => {
+      const inst = running[p.name];
+      const isRunning = !!inst;
+      return renderProfileCard(p.name, p.sizeMB, p.source, inst);
+    });
+
+    // Add running instances without profiles on disk
+    extraInstances.forEach(inst => {
+      cards.push(renderProfileCard(inst.name, 0, 'instance', inst.status === 'running' ? inst : null));
+    });
+
+    grid.innerHTML = cards.join('');
   } catch (e) {
-    console.error('Failed to load instances', e);
+    console.error('Failed to load profiles', e);
   }
 }
 
-function showLaunchModal() {
+function renderProfileCard(name, sizeMB, source, inst) {
+  const isRunning = inst && inst.status === 'running';
+  const statusBadge = isRunning
+    ? '<span class="inst-badge running">running :' + inst.port + '</span>'
+    : '<span class="inst-badge stopped">stopped</span>';
+
+  return ` + "`" + `
+    <div class="inst-card">
+      <div class="inst-header">
+        <span class="inst-name">${esc(name)}</span>
+        ${statusBadge}
+      </div>
+      <div class="inst-body">
+        <div class="inst-row"><span class="label">Size</span><span class="value">${sizeMB ? sizeMB.toFixed(0) + ' MB' : '—'}</span></div>
+        <div class="inst-row"><span class="label">Source</span><span class="value">${esc(source)}</span></div>
+        ${isRunning ? '<div class="inst-row"><span class="label">Mode</span><span class="value">' + (inst.headless ? '🔲 Headless' : '🖥️ Headed') + '</span></div>' : ''}
+        ${isRunning ? '<div class="inst-row"><span class="label">Tabs</span><span class="value">' + inst.tabCount + '</span></div>' : ''}
+        ${isRunning ? '<div class="inst-row"><span class="label">PID</span><span class="value">' + inst.pid + '</span></div>' : ''}
+      </div>
+      <div class="inst-actions">
+        ${isRunning
+          ? '<button onclick="viewInstanceLive(\'' + esc(inst.id) + '\', \'' + esc(inst.port) + '\')">📺 Live</button>'
+            + '<button onclick="viewInstanceLogs(\'' + esc(inst.id) + '\')">📄 Logs</button>'
+            + '<button onclick="openInstanceDirect(\'' + esc(inst.port) + '\')">🔗 Open</button>'
+            + '<button class="danger" onclick="stopInstance(\'' + esc(inst.id) + '\')">⏹ Stop</button>'
+          : '<button onclick="launchProfile(\'' + esc(name) + '\')">🚀 Launch</button>'
+            + '<button onclick="showProfileModal(\'' + esc(name) + '\')">⚙️ Manage</button>'
+            + '<button class="danger" onclick="deleteProfile(\'' + esc(name) + '\')">🗑️ Delete</button>'
+        }
+      </div>
+    </div>
+  ` + "`" + `;
+}
+
+function showCreateProfileModal() {
+  document.getElementById('create-profile-modal').classList.add('open');
+  document.getElementById('create-name').focus();
+}
+function closeCreateProfileModal() {
+  document.getElementById('create-profile-modal').classList.remove('open');
+}
+
+async function doCreateProfile() {
+  const name = document.getElementById('create-name').value.trim();
+  const source = document.getElementById('create-source').value.trim();
+
+  if (!name) { alert('Name required'); return; }
+  closeCreateProfileModal();
+
+  try {
+    if (source) {
+      await fetch('/profiles/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, source })
+      });
+    } else {
+      await fetch('/profiles/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+    }
+    loadProfiles();
+  } catch (e) { alert('Failed: ' + e.message); }
+}
+
+function launchProfile(name) {
+  document.getElementById('launch-name').value = name;
+  document.getElementById('launch-port').value = '';
   document.getElementById('launch-modal').classList.add('open');
-  document.getElementById('launch-name').focus();
+  document.getElementById('launch-port').focus();
 }
 function closeLaunchModal() {
   document.getElementById('launch-modal').classList.remove('open');
@@ -1178,7 +1246,7 @@ async function doLaunch() {
   const port = document.getElementById('launch-port').value.trim();
   const headless = document.getElementById('launch-headless').checked;
 
-  if (!name || !port) { alert('Name and port required'); return; }
+  if (!name || !port) { alert('Port required'); return; }
 
   closeLaunchModal();
 
@@ -1200,11 +1268,17 @@ async function doLaunch() {
   }
 }
 
+async function deleteProfile(name) {
+  if (!confirm('Delete profile "' + name + '"? This removes all data.')) return;
+  await fetch('/profiles/' + name, { method: 'DELETE' });
+  loadProfiles();
+}
+
 function pollInstanceStatus(id) {
   let attempts = 0;
   const poll = setInterval(async () => {
     attempts++;
-    await loadInstances();
+    await loadProfiles();
     if (attempts > 30) clearInterval(poll);
     try {
       const res = await fetch('/instances');
@@ -1212,7 +1286,7 @@ function pollInstanceStatus(id) {
       const inst = instances.find(i => i.id === id);
       if (inst && (inst.status === 'running' || inst.status === 'error' || inst.status === 'stopped')) {
         clearInterval(poll);
-        loadInstances();
+        loadProfiles();
       }
     } catch(e) { clearInterval(poll); }
   }, 1000);
@@ -1221,7 +1295,7 @@ function pollInstanceStatus(id) {
 async function stopInstance(id) {
   if (!confirm('Stop instance ' + id + '?')) return;
   await fetch('/instances/' + id + '/stop', { method: 'POST' });
-  setTimeout(loadInstances, 1000);
+  setTimeout(loadProfiles, 1000);
 }
 
 async function viewInstanceLogs(id) {
