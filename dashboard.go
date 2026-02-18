@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -10,6 +11,14 @@ import (
 	"sync"
 	"time"
 )
+
+// DashboardConfig holds tunable timeouts for agent status transitions.
+type DashboardConfig struct {
+	IdleTimeout       time.Duration // time before agent marked idle (default 30s)
+	DisconnectTimeout time.Duration // time before agent marked disconnected (default 5m)
+	ReaperInterval    time.Duration // how often to check agent status (default 10s)
+	SSEBufferSize     int           // per-client SSE channel buffer (default 64)
+}
 
 //go:embed dashboard
 var dashboardFS embed.FS
@@ -42,37 +51,71 @@ type AgentEvent struct {
 }
 
 type Dashboard struct {
+	cfg      DashboardConfig
 	agents   map[string]*AgentActivity
 	sseConns map[chan AgentEvent]struct{}
+	cancel   context.CancelFunc
 	mu       sync.RWMutex
 }
 
-func NewDashboard() *Dashboard {
+func NewDashboard(cfg *DashboardConfig) *Dashboard {
+	c := DashboardConfig{
+		IdleTimeout:       30 * time.Second,
+		DisconnectTimeout: 5 * time.Minute,
+		ReaperInterval:    10 * time.Second,
+		SSEBufferSize:     64,
+	}
+	if cfg != nil {
+		if cfg.IdleTimeout > 0 {
+			c.IdleTimeout = cfg.IdleTimeout
+		}
+		if cfg.DisconnectTimeout > 0 {
+			c.DisconnectTimeout = cfg.DisconnectTimeout
+		}
+		if cfg.ReaperInterval > 0 {
+			c.ReaperInterval = cfg.ReaperInterval
+		}
+		if cfg.SSEBufferSize > 0 {
+			c.SSEBufferSize = cfg.SSEBufferSize
+		}
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
 	d := &Dashboard{
+		cfg:      c,
 		agents:   make(map[string]*AgentActivity),
 		sseConns: make(map[chan AgentEvent]struct{}),
+		cancel:   cancel,
 	}
-	// Background goroutine to mark idle/disconnected agents
-	go d.reaper()
+	go d.reaper(ctx)
 	return d
 }
 
-func (d *Dashboard) reaper() {
+// Shutdown stops the reaper goroutine.
+func (d *Dashboard) Shutdown() { d.cancel() }
+
+func (d *Dashboard) reaper(ctx context.Context) {
+	ticker := time.NewTicker(d.cfg.ReaperInterval)
+	defer ticker.Stop()
 	for {
-		time.Sleep(10 * time.Second)
-		d.mu.Lock()
-		now := time.Now()
-		for id, a := range d.agents {
-			if a.Status == "disconnected" {
-				continue
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			d.mu.Lock()
+			now := time.Now()
+			for id, a := range d.agents {
+				if a.Status == "disconnected" {
+					continue
+				}
+				if now.Sub(a.LastSeen) > d.cfg.DisconnectTimeout {
+					d.agents[id].Status = "disconnected"
+				} else if now.Sub(a.LastSeen) > d.cfg.IdleTimeout {
+					d.agents[id].Status = "idle"
+				}
 			}
-			if now.Sub(a.LastSeen) > 5*time.Minute {
-				d.agents[id].Status = "disconnected"
-			} else if now.Sub(a.LastSeen) > 30*time.Second {
-				d.agents[id].Status = "idle"
-			}
+			d.mu.Unlock()
 		}
-		d.mu.Unlock()
 	}
 }
 
@@ -154,7 +197,7 @@ func (d *Dashboard) handleSSE(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
-	ch := make(chan AgentEvent, 64)
+	ch := make(chan AgentEvent, d.cfg.SSEBufferSize)
 	d.mu.Lock()
 	d.sseConns[ch] = struct{}{}
 	d.mu.Unlock()
@@ -193,15 +236,57 @@ func (d *Dashboard) handleDashboardUI(w http.ResponseWriter, r *http.Request) {
 // Tracking Middleware — extracts agent ID from header or query
 // ---------------------------------------------------------------------------
 
-func (d *Dashboard) TrackingMiddleware(pm *ProfileManager, next http.Handler) http.Handler {
+// EventObserver receives agent events for additional processing (e.g. profile tracking).
+type EventObserver func(evt AgentEvent)
+
+// extractAgentID reads the agent identifier from X-Agent-Id header or agentId query param.
+func extractAgentID(r *http.Request) string {
+	if id := r.Header.Get("X-Agent-Id"); id != "" {
+		return id
+	}
+	if id := r.URL.Query().Get("agentId"); id != "" {
+		return id
+	}
+	return "anonymous"
+}
+
+// extractProfile reads the profile name from X-Profile header or profile query param.
+func extractProfile(r *http.Request) string {
+	if p := r.Header.Get("X-Profile"); p != "" {
+		return p
+	}
+	return r.URL.Query().Get("profile")
+}
+
+// isManagementRoute returns true for routes that shouldn't be tracked in the activity feed.
+func isManagementRoute(path string) bool {
+	return strings.HasPrefix(path, "/dashboard") ||
+		strings.HasPrefix(path, "/profiles") ||
+		strings.HasPrefix(path, "/instances") ||
+		strings.HasPrefix(path, "/screencast/tabs") ||
+		path == "/welcome" || path == "/favicon.ico" || path == "/health"
+}
+
+// actionDetail extracts a human-readable detail string from the request.
+func actionDetail(r *http.Request) string {
+	switch r.URL.Path {
+	case "/navigate":
+		return r.URL.Query().Get("url")
+	case "/actions":
+		return "batch action"
+	case "/snapshot":
+		if sel := r.URL.Query().Get("selector"); sel != "" {
+			return "selector=" + sel
+		}
+	}
+	return ""
+}
+
+func (d *Dashboard) TrackingMiddleware(observers []EventObserver, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 
-		// Skip dashboard, profile, instance, and screencast management routes
-		p := r.URL.Path
-		if strings.HasPrefix(p, "/dashboard") || strings.HasPrefix(p, "/profiles") ||
-			strings.HasPrefix(p, "/instances") || strings.HasPrefix(p, "/screencast/tabs") ||
-			p == "/welcome" || p == "/favicon.ico" || p == "/health" {
+		if isManagementRoute(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -209,41 +294,13 @@ func (d *Dashboard) TrackingMiddleware(pm *ProfileManager, next http.Handler) ht
 		sw := &statusWriter{ResponseWriter: w, code: 200}
 		next.ServeHTTP(sw, r)
 
-		// Extract agent identity
-		agentID := r.Header.Get("X-Agent-Id")
-		if agentID == "" {
-			agentID = r.URL.Query().Get("agentId")
-		}
-		if agentID == "" {
-			agentID = "anonymous"
-		}
-
-		profile := r.Header.Get("X-Profile")
-		if profile == "" {
-			profile = r.URL.Query().Get("profile")
-		}
-
-		// Build detail string for interesting actions
-		detail := ""
-		switch r.URL.Path {
-		case "/navigate":
-			detail = r.URL.Query().Get("url")
-		case "/actions":
-			detail = "batch action"
-		case "/snapshot":
-			sel := r.URL.Query().Get("selector")
-			if sel != "" {
-				detail = "selector=" + sel
-			}
-		}
-
 		evt := AgentEvent{
-			AgentID:    agentID,
-			Profile:    profile,
+			AgentID:    extractAgentID(r),
+			Profile:    extractProfile(r),
 			Action:     r.Method + " " + r.URL.Path,
 			URL:        r.URL.Query().Get("url"),
 			TabID:      r.URL.Query().Get("tabId"),
-			Detail:     detail,
+			Detail:     actionDetail(r),
 			Status:     sw.code,
 			DurationMs: time.Since(start).Milliseconds(),
 			Timestamp:  start,
@@ -251,17 +308,8 @@ func (d *Dashboard) TrackingMiddleware(pm *ProfileManager, next http.Handler) ht
 
 		d.RecordEvent(evt)
 
-		// Also record in profile tracker if profile specified
-		if profile != "" {
-			pm.tracker.Record(profile, ActionRecord{
-				Timestamp:  start,
-				Method:     r.Method,
-				Endpoint:   r.URL.Path,
-				URL:        r.URL.Query().Get("url"),
-				TabID:      r.URL.Query().Get("tabId"),
-				DurationMs: time.Since(start).Milliseconds(),
-				Status:     sw.code,
-			})
+		for _, obs := range observers {
+			obs(evt)
 		}
 	})
 }

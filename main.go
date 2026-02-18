@@ -228,7 +228,7 @@ func main() {
 	// Profile manager + dashboard + orchestrator
 	profilesDir := filepath.Join(filepath.Dir(profileDir), "profiles")
 	profMgr := NewProfileManager(profilesDir)
-	dashboard := NewDashboard()
+	dashboard := NewDashboard(nil) // use default config
 	orchestrator := NewOrchestrator(profilesDir)
 
 	// Register the initial tab
@@ -286,7 +286,25 @@ func main() {
 		orchestrator.RegisterHandlers(mux)
 	}
 
-	srv := &http.Server{Addr: ":" + port, Handler: dashboard.TrackingMiddleware(profMgr, loggingMiddleware(corsMiddleware(authMiddleware(mux))))}
+	// Profile tracking observer — records per-profile analytics
+	profileObserver := func(evt AgentEvent) {
+		if evt.Profile != "" {
+			profMgr.tracker.Record(evt.Profile, ActionRecord{
+				Timestamp:  evt.Timestamp,
+				Method:     strings.SplitN(evt.Action, " ", 2)[0],
+				Endpoint:   strings.SplitN(evt.Action, " ", 2)[1],
+				URL:        evt.URL,
+				TabID:      evt.TabID,
+				DurationMs: evt.DurationMs,
+				Status:     evt.Status,
+			})
+		}
+	}
+
+	srv := &http.Server{Addr: ":" + port, Handler: dashboard.TrackingMiddleware(
+		[]EventObserver{profileObserver},
+		loggingMiddleware(corsMiddleware(authMiddleware(mux))),
+	)}
 
 	// Shutdown orchestration — used by both signal handler and /shutdown endpoint.
 	shutdownOnce := &sync.Once{}
