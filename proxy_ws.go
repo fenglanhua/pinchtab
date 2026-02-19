@@ -28,7 +28,7 @@ func proxyWebSocket(w http.ResponseWriter, r *http.Request, targetURL string) {
 		slog.Error("ws proxy: backend dial failed", "target", host, "err", err)
 		return
 	}
-	defer backend.Close()
+	defer func() { _ = backend.Close() }()
 
 	hj, ok := w.(http.Hijacker)
 	if !ok {
@@ -40,20 +40,20 @@ func proxyWebSocket(w http.ResponseWriter, r *http.Request, targetURL string) {
 		slog.Error("ws proxy: hijack failed", "err", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	reqLine := r.Method + " " + path + " HTTP/1.1\r\n"
-	backend.Write([]byte(reqLine))
-	backend.Write([]byte("Host: " + host + "\r\n"))
+	_, _ = backend.Write([]byte(reqLine))
+	_, _ = backend.Write([]byte("Host: " + host + "\r\n"))
 	for k, vv := range r.Header {
 		for _, v := range vv {
-			backend.Write([]byte(k + ": " + v + "\r\n"))
+			_, _ = backend.Write([]byte(k + ": " + v + "\r\n"))
 		}
 	}
-	backend.Write([]byte("\r\n"))
+	_, _ = backend.Write([]byte("\r\n"))
 
 	done := make(chan struct{}, 2)
-	go func() { io.Copy(client, backend); done <- struct{}{} }()
-	go func() { io.Copy(backend, client); done <- struct{}{} }()
+	go func() { _, _ = io.Copy(client, backend); done <- struct{}{} }()
+	go func() { _, _ = io.Copy(backend, client); done <- struct{}{} }()
 	<-done
 }

@@ -196,14 +196,14 @@ func (d *Dashboard) handleSSE(w http.ResponseWriter, r *http.Request) {
 
 	agents := d.GetAgents()
 	data, _ := json.Marshal(agents)
-	fmt.Fprintf(w, "event: init\ndata: %s\n\n", data)
+	_, _ = fmt.Fprintf(w, "event: init\ndata: %s\n\n", data)
 	flusher.Flush()
 
 	for {
 		select {
 		case evt := <-ch:
 			data, _ := json.Marshal(evt)
-			fmt.Fprintf(w, "event: action\ndata: %s\n\n", data)
+			_, _ = fmt.Fprintf(w, "event: action\ndata: %s\n\n", data)
 			flusher.Flush()
 		case <-r.Context().Done():
 			return
@@ -217,7 +217,7 @@ func (d *Dashboard) handleDashboardUI(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Pragma", "no-cache")
 	w.Header().Set("Expires", "0")
 	data, _ := dashboardFS.ReadFile("dashboard/dashboard.html")
-	w.Write(data)
+	_, _ = w.Write(data)
 }
 
 func (d *Dashboard) withNoCache(next http.Handler) http.Handler {

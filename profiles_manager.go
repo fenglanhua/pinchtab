@@ -32,7 +32,7 @@ type ProfileInfo struct {
 }
 
 func NewProfileManager(baseDir string) *ProfileManager {
-	os.MkdirAll(baseDir, 0755)
+	_ = os.MkdirAll(baseDir, 0755)
 	return &ProfileManager{
 		baseDir: baseDir,
 		tracker: NewActionTracker(),
@@ -116,7 +116,9 @@ func (pm *ProfileManager) Import(name, sourcePath string) error {
 		return fmt.Errorf("copy failed: %w", err)
 	}
 
-	os.WriteFile(filepath.Join(dest, ".pinchtab-imported"), []byte(sourcePath), 0644)
+	if err := os.WriteFile(filepath.Join(dest, ".pinchtab-imported"), []byte(sourcePath), 0644); err != nil {
+		slog.Warn("failed to write import marker", "err", err)
+	}
 	return nil
 }
 
@@ -167,7 +169,7 @@ func (pm *ProfileManager) Reset(name string) error {
 		}
 	}
 	for _, f := range nukeFiles {
-		os.Remove(filepath.Join(dir, f))
+		_ = os.Remove(filepath.Join(dir, f))
 	}
 
 	slog.Info("profile reset", "name", name)
@@ -195,7 +197,7 @@ func (pm *ProfileManager) Analytics(name string) AnalyticsReport {
 
 func dirSizeMB(path string) float64 {
 	var total int64
-	filepath.WalkDir(path, func(_ string, entry fs.DirEntry, err error) error {
+	_ = filepath.WalkDir(path, func(_ string, entry fs.DirEntry, err error) error {
 		if err != nil || entry.IsDir() {
 			return nil
 		}

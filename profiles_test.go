@@ -38,7 +38,7 @@ func TestProfileManagerCreateDuplicate(t *testing.T) {
 	dir := t.TempDir()
 	pm := NewProfileManager(dir)
 
-	pm.Create("dup")
+	_ = pm.Create("dup")
 	err := pm.Create("dup")
 	if err == nil {
 		t.Fatal("expected error on duplicate create")
@@ -50,8 +50,8 @@ func TestProfileManagerImport(t *testing.T) {
 	pm := NewProfileManager(dir)
 
 	src := filepath.Join(t.TempDir(), "chrome-src")
-	os.MkdirAll(filepath.Join(src, "Default"), 0755)
-	os.WriteFile(filepath.Join(src, "Default", "Preferences"), []byte(`{}`), 0644)
+	_ = os.MkdirAll(filepath.Join(src, "Default"), 0755)
+	_ = os.WriteFile(filepath.Join(src, "Default", "Preferences"), []byte(`{}`), 0644)
 
 	if err := pm.Import("imported-profile", src); err != nil {
 		t.Fatal(err)
@@ -144,14 +144,14 @@ func TestProfileManagerListReadsLocalStateIdentity(t *testing.T) {
 func TestProfileManagerReset(t *testing.T) {
 	dir := t.TempDir()
 	pm := NewProfileManager(dir)
-	pm.Create("reset-me")
+	_ = pm.Create("reset-me")
 
 	sessDir := filepath.Join(dir, "reset-me", "Default", "Sessions")
-	os.MkdirAll(sessDir, 0755)
-	os.WriteFile(filepath.Join(sessDir, "session1"), []byte("data"), 0644)
+	_ = os.MkdirAll(sessDir, 0755)
+	_ = os.WriteFile(filepath.Join(sessDir, "session1"), []byte("data"), 0644)
 
 	cacheDir := filepath.Join(dir, "reset-me", "Default", "Cache")
-	os.MkdirAll(cacheDir, 0755)
+	_ = os.MkdirAll(cacheDir, 0755)
 
 	if err := pm.Reset("reset-me"); err != nil {
 		t.Fatal(err)
@@ -180,7 +180,7 @@ func TestProfileManagerResetNotFound(t *testing.T) {
 func TestProfileManagerDelete(t *testing.T) {
 	dir := t.TempDir()
 	pm := NewProfileManager(dir)
-	pm.Create("delete-me")
+	_ = pm.Create("delete-me")
 
 	if err := pm.Delete("delete-me"); err != nil {
 		t.Fatal(err)
@@ -244,8 +244,8 @@ func TestActionTrackerRepeatDetection(t *testing.T) {
 
 func TestProfileHandlerList(t *testing.T) {
 	pm := NewProfileManager(t.TempDir())
-	pm.Create("a")
-	pm.Create("b")
+	_ = pm.Create("a")
+	_ = pm.Create("b")
 
 	mux := http.NewServeMux()
 	pm.RegisterHandlers(mux)
@@ -259,7 +259,7 @@ func TestProfileHandlerList(t *testing.T) {
 	}
 
 	var profiles []ProfileInfo
-	json.NewDecoder(w.Body).Decode(&profiles)
+	_ = json.NewDecoder(w.Body).Decode(&profiles)
 	if len(profiles) != 2 {
 		t.Errorf("expected 2 profiles, got %d", len(profiles))
 	}
@@ -282,7 +282,7 @@ func TestProfileHandlerCreate(t *testing.T) {
 
 func TestProfileHandlerReset(t *testing.T) {
 	pm := NewProfileManager(t.TempDir())
-	pm.Create("resettable")
+	_ = pm.Create("resettable")
 	mux := http.NewServeMux()
 	pm.RegisterHandlers(mux)
 
@@ -297,7 +297,7 @@ func TestProfileHandlerReset(t *testing.T) {
 
 func TestProfileHandlerDelete(t *testing.T) {
 	pm := NewProfileManager(t.TempDir())
-	pm.Create("deletable")
+	_ = pm.Create("deletable")
 	mux := http.NewServeMux()
 	pm.RegisterHandlers(mux)
 

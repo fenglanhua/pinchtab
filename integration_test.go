@@ -262,7 +262,7 @@ func TestFingerprintRotation(t *testing.T) {
 	}
 
 	var rotateResp map[string]any
-	json.NewDecoder(resp.Body).Decode(&rotateResp)
+	_ = json.NewDecoder(resp.Body).Decode(&rotateResp)
 
 	fp, ok := rotateResp["fingerprint"].(map[string]any)
 	if !ok {
@@ -334,7 +334,7 @@ func TestStealthStatusEndpoint(t *testing.T) {
 	}
 
 	var result map[string]any
-	json.NewDecoder(resp.Body).Decode(&result)
+	_ = json.NewDecoder(resp.Body).Decode(&result)
 
 	score, _ := result["score"].(float64)
 	if score < 50 {

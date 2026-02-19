@@ -121,7 +121,7 @@ func profileQueryInt(r *http.Request, key string, def int) int {
 		return def
 	}
 	var n int
-	fmt.Sscanf(s, "%d", &n)
+	_, _ = fmt.Sscanf(s, "%d", &n)
 	if n <= 0 {
 		return def
 	}

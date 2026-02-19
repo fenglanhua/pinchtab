@@ -93,7 +93,7 @@ func TestDashboardHandlerAgents(t *testing.T) {
 	}
 
 	var agents []AgentActivity
-	json.NewDecoder(w.Body).Decode(&agents)
+	_ = json.NewDecoder(w.Body).Decode(&agents)
 	if len(agents) != 1 || agents[0].AgentID != "test-agent" {
 		t.Errorf("unexpected agents: %+v", agents)
 	}
@@ -140,7 +140,7 @@ func TestDashboardSSEInit(t *testing.T) {
 		return
 	}
 	if resp != nil {
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		if resp.Header.Get("Content-Type") != "text/event-stream" {
 			t.Errorf("expected text/event-stream, got %s", resp.Header.Get("Content-Type"))
 		}

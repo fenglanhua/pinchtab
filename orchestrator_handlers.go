@@ -114,7 +114,7 @@ func (o *Orchestrator) handleLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/plain")
-	w.Write([]byte(logs))
+	_, _ = w.Write([]byte(logs))
 }
 
 func (o *Orchestrator) handleAllTabs(w http.ResponseWriter, r *http.Request) {

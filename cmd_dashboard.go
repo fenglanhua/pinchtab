@@ -25,7 +25,10 @@ func runDashboard() {
 	slog.Info("🦀 Pinchtab Dashboard", "port", dashPort)
 
 	profilesDir := filepath.Join(stateDir, "profiles")
-	os.MkdirAll(profilesDir, 0755)
+	if err := os.MkdirAll(profilesDir, 0755); err != nil {
+		slog.Error("cannot create profiles dir", "err", err)
+		os.Exit(1)
+	}
 
 	profMgr := NewProfileManager(profilesDir)
 	dashboard := NewDashboard(nil)
@@ -94,7 +97,9 @@ func runDashboard() {
 			defaultProfile = "default"
 		}
 
-		os.MkdirAll(filepath.Join(profilesDir, defaultProfile, "Default"), 0755)
+		if err := os.MkdirAll(filepath.Join(profilesDir, defaultProfile, "Default"), 0755); err != nil {
+			slog.Warn("failed to create default profile dir", "err", err)
+		}
 
 		go func() {
 
@@ -119,7 +124,9 @@ func runDashboard() {
 			orchestrator.Shutdown()
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			srv.Shutdown(ctx)
+			if err := srv.Shutdown(ctx); err != nil {
+				slog.Error("shutdown http", "err", err)
+			}
 		})
 	}
 
@@ -178,7 +185,7 @@ func proxyRequest(w http.ResponseWriter, r *http.Request, targetURL string) {
 		jsonErr(w, 502, fmt.Errorf("instance unreachable: %w", err))
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	for k, vv := range resp.Header {
 		for _, v := range vv {
@@ -191,7 +198,7 @@ func proxyRequest(w http.ResponseWriter, r *http.Request, targetURL string) {
 	for {
 		n, err := resp.Body.Read(buf)
 		if n > 0 {
-			w.Write(buf[:n])
+			_, _ = w.Write(buf[:n])
 			if f, ok := w.(http.Flusher); ok {
 				f.Flush()
 			}

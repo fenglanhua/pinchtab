@@ -44,9 +44,13 @@ func (o *Orchestrator) Launch(name, port string, headless bool) (*Instance, erro
 	}
 
 	profilePath := filepath.Join(o.baseDir, name)
-	os.MkdirAll(filepath.Join(profilePath, "Default"), 0755)
+	if err := os.MkdirAll(filepath.Join(profilePath, "Default"), 0755); err != nil {
+		return nil, fmt.Errorf("create profile dir: %w", err)
+	}
 	instanceStateDir := filepath.Join(profilePath, ".pinchtab-state")
-	os.MkdirAll(instanceStateDir, 0755)
+	if err := os.MkdirAll(instanceStateDir, 0755); err != nil {
+		return nil, fmt.Errorf("create state dir: %w", err)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -123,7 +127,7 @@ func (o *Orchestrator) monitor(inst *Instance) {
 		for _, baseURL := range instanceBaseURLs(inst.Port) {
 			resp, err := o.client.Get(baseURL + "/health")
 			if err == nil {
-				resp.Body.Close()
+				_ = resp.Body.Close()
 				lastProbe = fmt.Sprintf("%s -> HTTP %d", baseURL, resp.StatusCode)
 				if isInstanceHealthyStatus(resp.StatusCode) {
 					healthy = true
@@ -214,7 +218,7 @@ func (o *Orchestrator) Stop(id string) error {
 	req, _ := http.NewRequestWithContext(reqCtx, http.MethodPost, inst.URL+"/shutdown", nil)
 	resp, err := o.client.Do(req)
 	if err == nil {
-		resp.Body.Close()
+		_ = resp.Body.Close()
 	}
 
 	if waitForProcessExit(inst.PID, 5*time.Second) {
@@ -407,7 +411,7 @@ func (o *Orchestrator) fetchTabs(baseURL string) ([]remoteTab, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var tabs []remoteTab
 	if err := json.NewDecoder(resp.Body).Decode(&tabs); err != nil {

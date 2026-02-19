@@ -58,7 +58,7 @@ func (b *Bridge) handleScreencast(w http.ResponseWriter, r *http.Request) {
 		slog.Error("ws upgrade failed", "err", err)
 		return
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	ctx := tab.ctx
 	if ctx == nil {
