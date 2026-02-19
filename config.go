@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -48,7 +49,7 @@ var (
 	cdpURL           = os.Getenv("CDP_URL")
 	token            = os.Getenv("BRIDGE_TOKEN")
 	stateDir         = envOr("BRIDGE_STATE_DIR", filepath.Join(homeDir(), ".pinchtab"))
-	headless         = os.Getenv("BRIDGE_HEADLESS") == "true"
+	headless         = envBoolOr("BRIDGE_HEADLESS", true)
 	noRestore        = os.Getenv("BRIDGE_NO_RESTORE") == "true"
 	profileDir       = envOr("BRIDGE_PROFILE", filepath.Join(homeDir(), ".pinchtab", "chrome-profile"))
 	chromeVersion    = envOr("BRIDGE_CHROME_VERSION", "144.0.7559.133")
@@ -70,6 +71,21 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func envBoolOr(key string, fallback bool) bool {
+	v, ok := os.LookupEnv(key)
+	if !ok {
+		return fallback
+	}
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return fallback
+	}
 }
 
 func homeDir() string {

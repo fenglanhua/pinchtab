@@ -42,6 +42,11 @@ func main() {
 		os.Exit(0)
 	}
 
+	if len(os.Args) > 1 && os.Args[1] == "connect" {
+		handleConnectCommand()
+		os.Exit(0)
+	}
+
 	if len(os.Args) > 1 && os.Args[1] == "dashboard" {
 		runDashboard()
 		return

@@ -7,10 +7,10 @@ to give AI agents browser control via a simple REST API. It self-launches Chrome
 manages tabs, and exposes the accessibility tree as flat JSON with stable refs.
 
 ```
-┌─────────────┐     HTTP      ┌──────────────┐      CDP       ┌─────────────┐
-│   AI Agent  │ ────────────▶ │   Pinchtab   │ ─────────────▶ │   Chrome    │
-│  (any LLM)  │ ◀──────────── │  (Go binary) │ ◀───────────── │  (headless) │
-└─────────────┘    JSON/text  └──────────────┘   WebSocket    └─────────────┘
+┌─────────────┐     HTTP      ┌──────────────┐      CDP       ┌──────────────┐
+│   AI Agent  │ ────────────▶ │   Pinchtab   │ ─────────────▶ │    Chrome    │
+│  (any LLM)  │ ◀──────────── │  (Go binary) │ ◀───────────── │ headed/headless │
+└─────────────┘    JSON/text  └──────────────┘   WebSocket    └──────────────┘
 ```
 
 Agents never touch CDP directly. They send HTTP requests, get back JSON.
@@ -283,6 +283,34 @@ Agent                          Pinchtab                        Chrome
   │  {"clicked": true}            │                              │
   │◀──────────────────────────────│                              │
 ```
+
+### Typical Agent Interaction in Headed mode
+
+In headed mode, the human sets up and validates profiles first, then the agent runs against those profiles.
+
+```
+Human Operator        Dashboard (`pinchtab dashboard`)     Profile Instance        Agent
+     │                            │                              │                   │
+     │ create/import profile      │                              │                   │
+     │───────────────────────────▶│                              │                   │
+     │ launch profile on :9868    │                              │                   │
+     │───────────────────────────▶│ spawn `pinchtab`             │                   │
+     │                            │─────────────────────────────▶│ headed Chrome     │
+     │ manual login / 2FA         │                              │                   │
+     │<──────────────────────────────────── visible browser ────────────────────────-│
+     │ validate state             │                              │                   │
+     │                            │ profile URL ready            │                   │
+     │                            │─────────────┬───────────────-│                   │
+     │                            │             │                                    │
+     │                            │             │            POST /navigate          │
+     │                            │             │◀──────────────────────────────────-│
+     │                            │             │            GET /snapshot           │
+     │                            │             │◀──────────────────────────────────-│
+     │                            │             │            POST /action            │
+     │                            │             │◀──────────────────────────────────-│
+```
+
+Key point: the dashboard coordinates profiles and lifecycle, but agents call the running profile instance (`http://localhost:<profile-port>`), not the dashboard proxy endpoint.
 
 ### Token Efficiency
 

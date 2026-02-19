@@ -17,6 +17,35 @@ func TestEnvOr(t *testing.T) {
 	}
 }
 
+func TestEnvBoolOr(t *testing.T) {
+	if got := envBoolOr("PINCHTAB_TEST_BOOL_UNSET", true); !got {
+		t.Error("expected fallback true for unset env")
+	}
+	if got := envBoolOr("PINCHTAB_TEST_BOOL_UNSET", false); got {
+		t.Error("expected fallback false for unset env")
+	}
+
+	t.Setenv("PINCHTAB_TEST_BOOL", "true")
+	if got := envBoolOr("PINCHTAB_TEST_BOOL", false); !got {
+		t.Error("expected true from env true")
+	}
+
+	t.Setenv("PINCHTAB_TEST_BOOL", "false")
+	if got := envBoolOr("PINCHTAB_TEST_BOOL", true); got {
+		t.Error("expected false from env false")
+	}
+
+	t.Setenv("PINCHTAB_TEST_BOOL", "1")
+	if got := envBoolOr("PINCHTAB_TEST_BOOL", false); !got {
+		t.Error("expected true from env 1")
+	}
+
+	t.Setenv("PINCHTAB_TEST_BOOL", "0")
+	if got := envBoolOr("PINCHTAB_TEST_BOOL", true); got {
+		t.Error("expected false from env 0")
+	}
+}
+
 func TestHomeDir(t *testing.T) {
 	h := homeDir()
 	if h == "" {
