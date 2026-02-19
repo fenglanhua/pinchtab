@@ -57,123 +57,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	var allocCancel context.CancelFunc
-	var chromeOpts []chromedp.ExecAllocatorOption // stored for retry
-
-	if cdpURL != "" {
-		slog.Info("connecting to Chrome", "url", cdpURL)
-		bridge.allocCtx, allocCancel = chromedp.NewRemoteAllocator(context.Background(), cdpURL)
-	} else {
-		if err := os.MkdirAll(profileDir, 0755); err != nil {
-			slog.Error("cannot create profile dir", "err", err)
-			os.Exit(1)
-		}
-
-		for _, lockName := range []string{"SingletonLock", "SingletonSocket", "SingletonCookie"} {
-			lockPath := fmt.Sprintf("%s/%s", profileDir, lockName)
-			if err := os.Remove(lockPath); err == nil {
-				slog.Warn("removed stale lock", "file", lockName)
-			}
-		}
-
-		if wasUncleanExit() {
-			slog.Warn("previous session exited uncleanly, clearing Chrome session restore data")
-			clearChromeSessions()
-		}
-
-		slog.Info("launching Chrome", "profile", profileDir, "headless", headless)
-
-		chromeOpts = []chromedp.ExecAllocatorOption{
-
-			chromedp.UserDataDir(profileDir),
-			chromedp.NoFirstRun,
-			chromedp.NoDefaultBrowserCheck,
-
-			chromedp.Flag("exclude-switches", "enable-automation"),
-			chromedp.Flag("disable-infobars", true),
-			chromedp.Flag("disable-dev-shm-usage", true),
-			chromedp.Flag("disable-renderer-backgrounding", true),
-			chromedp.Flag("disable-background-timer-throttling", true),
-			chromedp.Flag("disable-backgrounding-occluded-windows", true),
-			chromedp.Flag("disable-client-side-phishing-detection", true),
-			chromedp.Flag("disable-default-apps", true),
-			chromedp.Flag("disable-hang-monitor", true),
-			chromedp.Flag("disable-prompt-on-repost", true),
-			chromedp.Flag("disable-sync", true),
-			chromedp.Flag("disable-web-security", false),
-
-			chromedp.Flag("disable-background-networking", false),
-			chromedp.Flag("enable-features", "NetworkService,NetworkServiceInProcess"),
-			chromedp.Flag("disable-popup-blocking", true),
-			chromedp.Flag("no-first-run", true),
-
-			chromedp.Flag("disable-session-crashed-bubble", true),
-			chromedp.Flag("hide-crash-restore-bubble", true),
-			chromedp.Flag("disable-device-discovery-notifications", true),
-
-			chromedp.Flag("js-flags", "--random-seed=1157259157"),
-
-			chromedp.WindowSize(1366, 768),
-		}
-
-		if chromeBinary != "" {
-			chromeOpts = append(chromeOpts, chromedp.ExecPath(chromeBinary))
-		}
-		if chromeExtraFlags != "" {
-			for _, f := range strings.Fields(chromeExtraFlags) {
-				if k, v, ok := strings.Cut(f, "="); ok {
-					chromeOpts = append(chromeOpts, chromedp.Flag(strings.TrimLeft(k, "-"), v))
-				} else {
-					chromeOpts = append(chromeOpts, chromedp.Flag(strings.TrimLeft(f, "-"), true))
-				}
-			}
-		}
-
-		if headless {
-			chromeOpts = append(chromeOpts, chromedp.Headless)
-		} else {
-			chromeOpts = append(chromeOpts, chromedp.Flag("headless", false))
-		}
-
-		markCleanExit()
-		bridge.allocCtx, allocCancel = chromedp.NewExecAllocator(context.Background(), chromeOpts...)
-	}
+	allocCtx, allocCancel, chromeOpts := setupAllocator()
 	defer allocCancel()
 
 	stealthSeed := rand.Intn(1000000000)
 	seededScript := fmt.Sprintf("var __pinchtab_seed = %d;\nvar __pinchtab_stealth_level = %q;\n", stealthSeed, stealthLevel) + stealthScript
 	bridge.stealthScript = seededScript
+	bridge.allocCtx = allocCtx
 
-	startChrome := func() (context.Context, context.CancelFunc, error) {
-		bCtx, bCancel := chromedp.NewContext(bridge.allocCtx)
-
-		startCtx, startDone := context.WithTimeout(context.Background(), chromeStartTimeout)
-		defer startDone()
-
-		errCh := make(chan error, 1)
-		go func() {
-			errCh <- chromedp.Run(bCtx,
-				chromedp.ActionFunc(func(ctx context.Context) error {
-					_, err := page.AddScriptToEvaluateOnNewDocument(seededScript).Do(ctx)
-					return err
-				}),
-			)
-		}()
-
-		select {
-		case err := <-errCh:
-			if err != nil {
-				bCancel()
-				return nil, nil, err
-			}
-			return bCtx, bCancel, nil
-		case <-startCtx.Done():
-			bCancel()
-			return nil, nil, fmt.Errorf("timed out after %s", chromeStartTimeout)
-		}
-	}
-
-	browserCtx, browserCancel, err := startChrome()
+	browserCtx, browserCancel, err := startChrome(seededScript)
 	if err != nil {
 		slog.Warn("Chrome startup failed, clearing sessions and retrying once", "err", err)
 
@@ -181,13 +73,11 @@ func main() {
 		clearChromeSessions()
 		markCleanExit()
 
-		if cdpURL != "" {
-			bridge.allocCtx, allocCancel = chromedp.NewRemoteAllocator(context.Background(), cdpURL)
-		} else {
-			bridge.allocCtx, allocCancel = chromedp.NewExecAllocator(context.Background(), chromeOpts...)
-		}
+		allocCtx, allocCancel, _ = setupAllocator()
+		bridge.allocCtx = allocCtx
+		_ = chromeOpts // used implicitly via setupAllocator
 
-		browserCtx, browserCancel, err = startChrome()
+		browserCtx, browserCancel, err = startChrome(seededScript)
 		if err != nil {
 			slog.Error("Chrome failed to start after retry",
 				"err", err,
@@ -201,17 +91,7 @@ func main() {
 	}
 	defer browserCancel()
 
-	if timezone != "" {
-		if err := chromedp.Run(browserCtx,
-			chromedp.ActionFunc(func(ctx context.Context) error {
-				return emulation.SetTimezoneOverride(timezone).Do(ctx)
-			}),
-		); err != nil {
-			slog.Warn("timezone override failed", "tz", timezone, "err", err)
-		} else {
-			slog.Info("timezone override", "tz", timezone)
-		}
-	}
+	applyTimezone(browserCtx)
 
 	bridge.browserCtx = browserCtx
 	bridge.tabs = make(map[string]*TabEntry)
@@ -236,7 +116,6 @@ func main() {
 	}
 
 	if !noRestore {
-
 		go bridge.RestoreState()
 	}
 
@@ -245,34 +124,7 @@ func main() {
 	go bridge.CleanStaleTabs(cleanupCtx, 30*actionTimeout)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health", bridge.handleHealth)
-	mux.HandleFunc("GET /tabs", bridge.handleTabs)
-	mux.HandleFunc("GET /snapshot", bridge.handleSnapshot)
-	mux.HandleFunc("GET /screenshot", bridge.handleScreenshot)
-	mux.HandleFunc("GET /text", bridge.handleText)
-	mux.HandleFunc("POST /navigate", bridge.handleNavigate)
-	mux.HandleFunc("POST /action", bridge.handleAction)
-	mux.HandleFunc("POST /actions", bridge.handleActions)
-	mux.HandleFunc("POST /evaluate", bridge.handleEvaluate)
-	mux.HandleFunc("POST /tab", bridge.handleTab)
-	mux.HandleFunc("POST /tab/lock", bridge.handleTabLock)
-	mux.HandleFunc("POST /tab/unlock", bridge.handleTabUnlock)
-	mux.HandleFunc("GET /cookies", bridge.handleGetCookies)
-	mux.HandleFunc("POST /cookies", bridge.handleSetCookies)
-	mux.HandleFunc("GET /stealth/status", bridge.handleStealthStatus)
-	mux.HandleFunc("POST /fingerprint/rotate", bridge.handleFingerprintRotate)
-	mux.HandleFunc("GET /screencast", bridge.handleScreencast)
-	mux.HandleFunc("GET /screencast/tabs", bridge.handleScreencastAll)
-	mux.HandleFunc("GET /welcome", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write([]byte(welcomeHTML))
-	})
-
-	profMgr.RegisterHandlers(mux)
-	dashboard.RegisterHandlers(mux)
-	if os.Getenv("BRIDGE_NO_DASHBOARD") == "" {
-		orchestrator.RegisterHandlers(mux)
-	}
+	registerRoutes(mux, &bridge, profMgr, dashboard, orchestrator)
 
 	profileObserver := func(evt AgentEvent) {
 		if evt.Profile != "" {
@@ -316,19 +168,12 @@ func main() {
 
 	mux.HandleFunc("POST /shutdown", bridge.handleShutdown(doShutdown))
 
-	go func() {
-		sig := make(chan os.Signal, 2)
-		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-		<-sig
-		go doShutdown()
-		<-sig
-		slog.Warn("force shutdown requested")
+	setupSignalHandler(doShutdown, func() {
 		orchestrator.ForceShutdown()
 		cleanupCancel()
 		browserCancel()
 		allocCancel()
-		os.Exit(130)
-	}()
+	})
 
 	slog.Info("🦀 PINCH! PINCH!", "port", port, "cdp", cdpURL, "stealth", stealthLevel)
 	if token != "" {
@@ -337,27 +182,212 @@ func main() {
 		slog.Info("auth disabled (set BRIDGE_TOKEN to enable)")
 	}
 
-	go func() {
-		time.Sleep(500 * time.Millisecond)
-		client := &http.Client{Timeout: 5 * time.Second}
-		resp, err := client.Get(fmt.Sprintf("http://localhost:%s/health", port))
-		if err != nil {
-			slog.Error("startup health check failed",
-				"err", err,
-				"hint", "try BRIDGE_NO_RESTORE=true or delete your profile directory",
-			)
-			return
-		}
-		_ = resp.Body.Close()
-		if resp.StatusCode == http.StatusOK {
-			slog.Info("startup health check passed")
-		} else {
-			slog.Warn("startup health check unexpected status", "status", resp.StatusCode)
-		}
-	}()
+	go runStartupHealthCheck()
 
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		slog.Error("server", "err", err)
 		os.Exit(1)
+	}
+}
+
+// setupAllocator creates the Chrome allocator context (remote or local).
+func setupAllocator() (context.Context, context.CancelFunc, []chromedp.ExecAllocatorOption) {
+	if cdpURL != "" {
+		slog.Info("connecting to Chrome", "url", cdpURL)
+		ctx, cancel := chromedp.NewRemoteAllocator(context.Background(), cdpURL)
+		return ctx, cancel, nil
+	}
+
+	if err := os.MkdirAll(profileDir, 0755); err != nil {
+		slog.Error("cannot create profile dir", "err", err)
+		os.Exit(1)
+	}
+
+	for _, lockName := range []string{"SingletonLock", "SingletonSocket", "SingletonCookie"} {
+		lockPath := fmt.Sprintf("%s/%s", profileDir, lockName)
+		if err := os.Remove(lockPath); err == nil {
+			slog.Warn("removed stale lock", "file", lockName)
+		}
+	}
+
+	if wasUncleanExit() {
+		slog.Warn("previous session exited uncleanly, clearing Chrome session restore data")
+		clearChromeSessions()
+	}
+
+	slog.Info("launching Chrome", "profile", profileDir, "headless", headless)
+
+	opts := buildChromeOpts()
+
+	markCleanExit()
+	ctx, cancel := chromedp.NewExecAllocator(context.Background(), opts...)
+	return ctx, cancel, opts
+}
+
+// buildChromeOpts assembles the Chrome flags for local execution.
+func buildChromeOpts() []chromedp.ExecAllocatorOption {
+	opts := []chromedp.ExecAllocatorOption{
+		chromedp.UserDataDir(profileDir),
+		chromedp.NoFirstRun,
+		chromedp.NoDefaultBrowserCheck,
+
+		chromedp.Flag("exclude-switches", "enable-automation"),
+		chromedp.Flag("disable-infobars", true),
+		chromedp.Flag("disable-dev-shm-usage", true),
+		chromedp.Flag("disable-renderer-backgrounding", true),
+		chromedp.Flag("disable-background-timer-throttling", true),
+		chromedp.Flag("disable-backgrounding-occluded-windows", true),
+		chromedp.Flag("disable-client-side-phishing-detection", true),
+		chromedp.Flag("disable-default-apps", true),
+		chromedp.Flag("disable-hang-monitor", true),
+		chromedp.Flag("disable-prompt-on-repost", true),
+		chromedp.Flag("disable-sync", true),
+		chromedp.Flag("disable-web-security", false),
+
+		chromedp.Flag("disable-background-networking", false),
+		chromedp.Flag("enable-features", "NetworkService,NetworkServiceInProcess"),
+		chromedp.Flag("disable-popup-blocking", true),
+		chromedp.Flag("no-first-run", true),
+
+		chromedp.Flag("disable-session-crashed-bubble", true),
+		chromedp.Flag("hide-crash-restore-bubble", true),
+		chromedp.Flag("disable-device-discovery-notifications", true),
+
+		chromedp.Flag("js-flags", "--random-seed=1157259157"),
+
+		chromedp.WindowSize(1366, 768),
+	}
+
+	if chromeBinary != "" {
+		opts = append(opts, chromedp.ExecPath(chromeBinary))
+	}
+	if chromeExtraFlags != "" {
+		for _, f := range strings.Fields(chromeExtraFlags) {
+			if k, v, ok := strings.Cut(f, "="); ok {
+				opts = append(opts, chromedp.Flag(strings.TrimLeft(k, "-"), v))
+			} else {
+				opts = append(opts, chromedp.Flag(strings.TrimLeft(f, "-"), true))
+			}
+		}
+	}
+
+	if headless {
+		opts = append(opts, chromedp.Headless)
+	} else {
+		opts = append(opts, chromedp.Flag("headless", false))
+	}
+
+	return opts
+}
+
+// startChrome creates a browser context and injects the stealth script.
+func startChrome(seededScript string) (context.Context, context.CancelFunc, error) {
+	bCtx, bCancel := chromedp.NewContext(bridge.allocCtx)
+
+	startCtx, startDone := context.WithTimeout(context.Background(), chromeStartTimeout)
+	defer startDone()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- chromedp.Run(bCtx,
+			chromedp.ActionFunc(func(ctx context.Context) error {
+				_, err := page.AddScriptToEvaluateOnNewDocument(seededScript).Do(ctx)
+				return err
+			}),
+		)
+	}()
+
+	select {
+	case err := <-errCh:
+		if err != nil {
+			bCancel()
+			return nil, nil, err
+		}
+		return bCtx, bCancel, nil
+	case <-startCtx.Done():
+		bCancel()
+		return nil, nil, fmt.Errorf("timed out after %s", chromeStartTimeout)
+	}
+}
+
+// applyTimezone sets the browser timezone override if configured.
+func applyTimezone(browserCtx context.Context) {
+	if timezone == "" {
+		return
+	}
+	if err := chromedp.Run(browserCtx,
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			return emulation.SetTimezoneOverride(timezone).Do(ctx)
+		}),
+	); err != nil {
+		slog.Warn("timezone override failed", "tz", timezone, "err", err)
+	} else {
+		slog.Info("timezone override", "tz", timezone)
+	}
+}
+
+// registerRoutes wires all HTTP handlers to the mux.
+func registerRoutes(mux *http.ServeMux, b *Bridge, profMgr *ProfileManager, dashboard *Dashboard, orchestrator *Orchestrator) {
+	mux.HandleFunc("GET /health", b.handleHealth)
+	mux.HandleFunc("GET /tabs", b.handleTabs)
+	mux.HandleFunc("GET /snapshot", b.handleSnapshot)
+	mux.HandleFunc("GET /screenshot", b.handleScreenshot)
+	mux.HandleFunc("GET /text", b.handleText)
+	mux.HandleFunc("POST /navigate", b.handleNavigate)
+	mux.HandleFunc("POST /action", b.handleAction)
+	mux.HandleFunc("POST /actions", b.handleActions)
+	mux.HandleFunc("POST /evaluate", b.handleEvaluate)
+	mux.HandleFunc("POST /tab", b.handleTab)
+	mux.HandleFunc("POST /tab/lock", b.handleTabLock)
+	mux.HandleFunc("POST /tab/unlock", b.handleTabUnlock)
+	mux.HandleFunc("GET /cookies", b.handleGetCookies)
+	mux.HandleFunc("POST /cookies", b.handleSetCookies)
+	mux.HandleFunc("GET /stealth/status", b.handleStealthStatus)
+	mux.HandleFunc("POST /fingerprint/rotate", b.handleFingerprintRotate)
+	mux.HandleFunc("GET /screencast", b.handleScreencast)
+	mux.HandleFunc("GET /screencast/tabs", b.handleScreencastAll)
+	mux.HandleFunc("GET /welcome", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(welcomeHTML))
+	})
+
+	profMgr.RegisterHandlers(mux)
+	dashboard.RegisterHandlers(mux)
+	if os.Getenv("BRIDGE_NO_DASHBOARD") == "" {
+		orchestrator.RegisterHandlers(mux)
+	}
+}
+
+// setupSignalHandler listens for SIGINT/SIGTERM for graceful and force shutdown.
+func setupSignalHandler(shutdownFn func(), forceFn func()) {
+	go func() {
+		sig := make(chan os.Signal, 2)
+		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+		<-sig
+		go shutdownFn()
+		<-sig
+		slog.Warn("force shutdown requested")
+		forceFn()
+		os.Exit(130)
+	}()
+}
+
+// runStartupHealthCheck verifies the server is responding after launch.
+func runStartupHealthCheck() {
+	time.Sleep(500 * time.Millisecond)
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get(fmt.Sprintf("http://localhost:%s/health", port))
+	if err != nil {
+		slog.Error("startup health check failed",
+			"err", err,
+			"hint", "try BRIDGE_NO_RESTORE=true or delete your profile directory",
+		)
+		return
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode == http.StatusOK {
+		slog.Info("startup health check passed")
+	} else {
+		slog.Warn("startup health check unexpected status", "status", resp.StatusCode)
 	}
 }
