@@ -164,12 +164,21 @@ Verify every registered route returns a non-404 status (may return 400/503 for m
 | RE21 | `/instances/nonexistent/logs` | GET | 404 | ✅ |
 | RE22 | `/instances/nonexistent/proxy/screencast?tabId=x` | GET | 404 | ✅ |
 
-### Agent-friendly routes
+### Profile lifecycle (by ID — canonical for agents)
 
 | # | Route | Method | Expected | Auto |
 |---|-------|--------|----------|------|
-| RE23 | `/start/000000000000` | POST | 404 (unknown profile ID) | ✅ |
-| RE24 | `/stop/000000000000` | POST | 404 (unknown profile ID) | ✅ |
+| RE23 | `/profiles/{id}/start` | POST | 201 (launches instance) | ✅ |
+| RE24 | `/profiles/{id}/stop` | POST | 200 (stops instance) | ✅ |
+| RE25a | `/profiles/{id}/instance` | GET | 200 (instance status) | ✅ |
+| RE25b | `/profiles/{unknownId}/start` | POST | 404 | ✅ |
+
+### Short aliases (agent convenience)
+
+| # | Route | Method | Expected | Auto |
+|---|-------|--------|----------|------|
+| RE25c | `/start/{id}` | POST | 201 (same as /profiles/{id}/start) | ✅ |
+| RE25d | `/stop/{id}` | POST | 200 (same as /profiles/{id}/stop) | ✅ |
 
 ### Proxy endpoints (503 when no instance running)
 

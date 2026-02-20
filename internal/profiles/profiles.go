@@ -56,6 +56,12 @@ func NewProfileManager(baseDir string) *ProfileManager {
 	}
 }
 
+func (pm *ProfileManager) Exists(name string) bool {
+	dir := filepath.Join(pm.baseDir, name)
+	info, err := os.Stat(dir)
+	return err == nil && info.IsDir()
+}
+
 func (pm *ProfileManager) List() ([]bridge.ProfileInfo, error) {
 	pm.mu.RLock()
 	defer pm.mu.RUnlock()

@@ -9,19 +9,23 @@ import (
 )
 
 func (o *Orchestrator) RegisterHandlers(mux *http.ServeMux) {
+	// Core routes
 	mux.HandleFunc("GET /instances", o.handleList)
+	mux.HandleFunc("GET /instances/tabs", o.handleAllTabs)
 
-	// Agent-friendly routes: start/stop by profile ID
+	// Profile lifecycle by ID (canonical)
+	mux.HandleFunc("POST /profiles/{id}/start", o.handleStartByID)
+	mux.HandleFunc("POST /profiles/{id}/stop", o.handleStopByID)
+	mux.HandleFunc("GET /profiles/{id}/instance", o.handleProfileInstance)
+
+	// Short aliases for agents
 	mux.HandleFunc("POST /start/{id}", o.handleStartByID)
 	mux.HandleFunc("POST /stop/{id}", o.handleStopByID)
 
-	// Dashboard-compatible aliases
-	mux.HandleFunc("POST /instances/launch", o.handleLaunchCompat)
+	// Dashboard / backward compat
+	mux.HandleFunc("POST /instances/launch", o.handleLaunchByName)
 	mux.HandleFunc("POST /instances/{id}/stop", o.handleStopByInstanceID)
 	mux.HandleFunc("GET /instances/{id}/logs", o.handleLogsByID)
-	mux.HandleFunc("GET /instances/tabs", o.handleAllTabs)
-	mux.HandleFunc("POST /profiles/{name}/stop", o.handleStopProfileByPath)
-	mux.HandleFunc("GET /profiles/{name}/instance", o.handleProfileInstance)
 	mux.HandleFunc("GET /instances/{id}/proxy/screencast", o.handleProxyScreencast)
 }
 
@@ -29,13 +33,26 @@ func (o *Orchestrator) handleList(w http.ResponseWriter, r *http.Request) {
 	web.JSON(w, 200, o.List())
 }
 
+// resolveProfileID resolves a path value to a profile name.
+// Accepts both a 12-char hex profile ID or a profile name directly.
+func (o *Orchestrator) resolveProfileName(idOrName string) (string, error) {
+	if o.profiles == nil {
+		return "", fmt.Errorf("profile manager not configured")
+	}
+	// Try as ID first
+	if name, err := o.profiles.FindByID(idOrName); err == nil {
+		return name, nil
+	}
+	// Try as name (for backward compat routes like /profiles/{name}/stop)
+	if o.profiles.Exists(idOrName) {
+		return idOrName, nil
+	}
+	return "", fmt.Errorf("profile %q not found", idOrName)
+}
+
 func (o *Orchestrator) handleStartByID(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	if o.profiles == nil {
-		web.Error(w, 500, fmt.Errorf("profile manager not configured"))
-		return
-	}
-	name, err := o.profiles.FindByID(id)
+	name, err := o.resolveProfileName(id)
 	if err != nil {
 		web.Error(w, 404, err)
 		return
@@ -60,11 +77,7 @@ func (o *Orchestrator) handleStartByID(w http.ResponseWriter, r *http.Request) {
 
 func (o *Orchestrator) handleStopByID(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	if o.profiles == nil {
-		web.Error(w, 500, fmt.Errorf("profile manager not configured"))
-		return
-	}
-	name, err := o.profiles.FindByID(id)
+	name, err := o.resolveProfileName(id)
 	if err != nil {
 		web.Error(w, 404, err)
 		return
@@ -76,7 +89,7 @@ func (o *Orchestrator) handleStopByID(w http.ResponseWriter, r *http.Request) {
 	web.JSON(w, 200, map[string]string{"status": "stopped", "id": id, "name": name})
 }
 
-func (o *Orchestrator) handleLaunchCompat(w http.ResponseWriter, r *http.Request) {
+func (o *Orchestrator) handleLaunchByName(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Name     string `json:"name"`
 		Port     string `json:"port"`
@@ -123,17 +136,19 @@ func (o *Orchestrator) handleAllTabs(w http.ResponseWriter, r *http.Request) {
 	web.JSON(w, 200, o.AllTabs())
 }
 
-func (o *Orchestrator) handleStopProfileByPath(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if err := o.StopProfile(name); err != nil {
-		web.Error(w, 404, err)
+func (o *Orchestrator) handleProfileInstance(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	name, err := o.resolveProfileName(id)
+	if err != nil {
+		web.JSON(w, 200, map[string]any{
+			"name":    id,
+			"running": false,
+			"status":  "stopped",
+			"port":    "",
+		})
 		return
 	}
-	web.JSON(w, 200, map[string]string{"status": "stopped", "name": name})
-}
 
-func (o *Orchestrator) handleProfileInstance(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
 	instances := o.List()
 	for _, inst := range instances {
 		if inst.Name == name && (inst.Status == "running" || inst.Status == "starting") {
@@ -170,5 +185,3 @@ func (o *Orchestrator) handleProxyScreencast(w http.ResponseWriter, r *http.Requ
 	targetURL := fmt.Sprintf("ws://localhost:%s/screencast?tabId=%s", inst.Port, tabID)
 	web.JSON(w, 200, map[string]string{"wsUrl": targetURL})
 }
-
-// handleLogs removed — use handleLogsByID (path-param) instead

@@ -148,7 +148,7 @@ function renderProfileCard(profile, inst) {
   let actions = '';
   if (isRunning) {
     actions = '<button onclick="viewProfileDetails(\'' + esc(name) + '\', \'' + esc(inst.id) + '\')">Details</button>'
-      + '<button class="danger" onclick="stopProfile(\'' + esc(name) + '\')">Stop</button>';
+      + '<button class="danger" onclick="stopProfile(\'' + esc(profile.id) + '\', \'' + esc(name) + '\')">Stop</button>';
   } else {
     actions = '<button onclick="viewProfileDetails(\'' + esc(name) + '\', \'' + esc(inst ? inst.id : '') + '\')">Details</button>'
       + '<button class="btn-launch" onclick="openLaunchModal(\'' + esc(name) + '\')">Launch</button>';
@@ -348,9 +348,9 @@ async function stopInstance(id) {
   setTimeout(loadProfiles, 1000);
 }
 
-async function stopProfile(name) {
+async function stopProfile(profileId, name) {
   if (!await appConfirm('Stop profile "' + name + '" gracefully?', '⏹ Stop Profile')) return;
-  const res = await fetch('/profiles/' + encodeURIComponent(name) + '/stop', { method: 'POST' });
+  const res = await fetch('/profiles/' + encodeURIComponent(profileId) + '/stop', { method: 'POST' });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     await appAlert('Stop failed: ' + (data.error || res.statusText), 'Error');

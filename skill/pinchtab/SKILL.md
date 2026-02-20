@@ -165,12 +165,15 @@ Returns array of profiles with `id`, `name`, `accountEmail`, `useWhen`, etc.
 
 ```bash
 # Auto-allocate port (recommended)
-curl -X POST http://localhost:9867/start/278be873adeb
+curl -X POST http://localhost:9867/profiles/278be873adeb/start
 
 # With specific port and headless mode
-curl -X POST http://localhost:9867/start/278be873adeb \
+curl -X POST http://localhost:9867/profiles/278be873adeb/start \
   -H 'Content-Type: application/json' \
   -d '{"port": "9868", "headless": true}'
+
+# Short alias (same behavior)
+curl -X POST http://localhost:9867/start/278be873adeb
 ```
 
 Returns the instance info including the allocated `port`. Use that port for all subsequent API calls (navigate, snapshot, action, etc.).
@@ -178,24 +181,25 @@ Returns the instance info including the allocated `port`. Use that port for all 
 ### Stop a profile by ID
 
 ```bash
+curl -X POST http://localhost:9867/profiles/278be873adeb/stop
+
+# Short alias
 curl -X POST http://localhost:9867/stop/278be873adeb
 ```
 
 ### Check profile instance status
 
 ```bash
+# By profile ID (recommended)
+curl http://localhost:9867/profiles/278be873adeb/instance
+
+# By profile name (also works)
 curl http://localhost:9867/profiles/Pinchtab%20org/instance
 ```
 
-### Launch by name (alternative)
+### Launch by name (dashboard style)
 
 ```bash
-# Via /launch endpoint (name-based)
-curl -X POST http://localhost:9867/launch \
-  -H 'Content-Type: application/json' \
-  -d '{"profile": "work", "port": "9868", "headless": true}'
-
-# Via /instances/launch (dashboard compat)
 curl -X POST http://localhost:9867/instances/launch \
   -H 'Content-Type: application/json' \
   -d '{"name": "work", "port": "9868"}'
@@ -206,10 +210,10 @@ curl -X POST http://localhost:9867/instances/launch \
 ```bash
 # 1. List profiles to find the right one
 PROFILES=$(curl -s http://localhost:9867/profiles)
-# Pick the profile ID you need
+# Pick the profile ID you need (12-char hex, e.g. "278be873adeb")
 
-# 2. Start the profile
-INSTANCE=$(curl -s -X POST http://localhost:9867/start/$PROFILE_ID)
+# 2. Start the profile (auto-allocates port)
+INSTANCE=$(curl -s -X POST http://localhost:9867/profiles/$PROFILE_ID/start)
 PORT=$(echo $INSTANCE | jq -r .port)
 
 # 3. Use the instance (all API calls go to the instance port)
@@ -217,8 +221,11 @@ curl -X POST http://localhost:$PORT/navigate -H 'Content-Type: application/json'
   -d '{"url": "https://mail.google.com"}'
 curl http://localhost:$PORT/snapshot?maxTokens=4000
 
-# 4. Stop when done
-curl -s -X POST http://localhost:9867/stop/$PROFILE_ID
+# 4. Check instance status
+curl http://localhost:9867/profiles/$PROFILE_ID/instance
+
+# 5. Stop when done
+curl -s -X POST http://localhost:9867/profiles/$PROFILE_ID/stop
 ```
 
 ### Profile IDs
