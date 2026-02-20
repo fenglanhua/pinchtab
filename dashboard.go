@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"embed"
 	"encoding/json"
@@ -60,8 +61,100 @@ type Dashboard struct {
 }
 
 // SetInstanceLister sets the orchestrator for aggregating agents from child instances.
+// Also starts a background relay that subscribes to child instance SSE events.
 func (d *Dashboard) SetInstanceLister(il InstanceLister) {
 	d.instances = il
+	go d.relayChildEvents()
+}
+
+// relayChildEvents periodically checks for running child instances and subscribes
+// to their SSE streams, re-broadcasting events through the dashboard.
+func (d *Dashboard) relayChildEvents() {
+	tracked := make(map[string]context.CancelFunc) // port -> cancel
+
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		if d.instances == nil {
+			continue
+		}
+
+		activePorts := make(map[string]bool)
+		for _, inst := range d.instances.List() {
+			if inst.Status != "running" || inst.Port == "" {
+				continue
+			}
+			activePorts[inst.Port] = true
+			if _, ok := tracked[inst.Port]; !ok {
+				ctx, cancel := context.WithCancel(context.Background())
+				tracked[inst.Port] = cancel
+				go d.subscribeChildSSE(ctx, inst.Port, inst.Name)
+			}
+		}
+
+		// Stop subscriptions for instances that are no longer running.
+		for port, cancel := range tracked {
+			if !activePorts[port] {
+				cancel()
+				delete(tracked, port)
+			}
+		}
+	}
+}
+
+func (d *Dashboard) subscribeChildSSE(ctx context.Context, port, profileName string) {
+	url := "http://127.0.0.1:" + port + "/dashboard/events"
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err != nil {
+			return
+		}
+		client := &http.Client{Timeout: 0} // no timeout for SSE
+		resp, err := client.Do(req)
+		if err != nil {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(3 * time.Second):
+				continue
+			}
+		}
+		d.readSSEStream(ctx, resp, profileName)
+		_ = resp.Body.Close()
+
+		// Reconnect after disconnect.
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(2 * time.Second):
+		}
+	}
+}
+
+func (d *Dashboard) readSSEStream(ctx context.Context, resp *http.Response, profileName string) {
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		if ctx.Err() != nil {
+			return
+		}
+		line := scanner.Text()
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		data := line[6:]
+		var evt AgentEvent
+		if err := json.Unmarshal([]byte(data), &evt); err != nil {
+			continue
+		}
+		if evt.Profile == "" {
+			evt.Profile = profileName
+		}
+		d.RecordEvent(evt)
+	}
 }
 
 func NewDashboard(cfg *DashboardConfig) *Dashboard {
@@ -167,40 +260,7 @@ func (d *Dashboard) GetAgents() []AgentActivity {
 		agents = append(agents, *a)
 	}
 
-	// Aggregate agents from running child instances.
-	if d.instances != nil {
-		for _, inst := range d.instances.List() {
-			if inst.Status != "running" || inst.Port == "" {
-				continue
-			}
-			remote := d.fetchRemoteAgents(inst.Port, inst.Name)
-			agents = append(agents, remote...)
-		}
-	}
 	return agents
-}
-
-func (d *Dashboard) fetchRemoteAgents(port, profileName string) []AgentActivity {
-	client := &http.Client{Timeout: 2 * time.Second}
-	resp, err := client.Get("http://127.0.0.1:" + port + "/dashboard/agents")
-	if err != nil || resp.StatusCode != 200 {
-		if resp != nil {
-			_ = resp.Body.Close()
-		}
-		return nil
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	var remote []AgentActivity
-	if err := json.NewDecoder(resp.Body).Decode(&remote); err != nil {
-		return nil
-	}
-	for i := range remote {
-		if remote[i].Profile == "" {
-			remote[i].Profile = profileName
-		}
-	}
-	return remote
 }
 
 func (d *Dashboard) RegisterHandlers(mux *http.ServeMux) {
