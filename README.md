@@ -264,57 +264,9 @@ In headed mode, log into sites in the visible Chrome window once; cookies and lo
 
 ## Identifying Pinchtab Chrome Instances
 
-Running multiple Chrome instances? Here's how to tell Pinchtab's apart from your regular browser.
+Need to distinguish Pinchtab's Chrome from your regular browser? Use `CHROME_BINARY` to point at a renamed Chrome copy, `CHROME_FLAGS` to tag instances in `ps`, or rely on the separate profile directory that's already built-in.
 
-### Rename the Chrome binary (recommended)
-
-Copy Chrome to a custom name — changes the actual process name in `ps`, Activity Monitor, Task Manager:
-
-```bash
-# macOS
-cp "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" /usr/local/bin/pinchtab-chrome
-
-# Linux
-cp $(which google-chrome) /usr/local/bin/pinchtab-chrome
-
-chmod +x /usr/local/bin/pinchtab-chrome
-```
-
-Then point Pinchtab at it:
-
-```bash
-CHROME_BINARY=/usr/local/bin/pinchtab-chrome ./pinchtab
-```
-
-Now `ps aux | grep pinchtab-chrome` instantly identifies the automation instance. Name it whatever you want — `ai-agent-chrome`, `bot-chrome`, etc.
-
-### Add custom flags (visible in command line)
-
-```bash
-CHROME_FLAGS="--pinchtab-instance=prod-scraper-01" ./pinchtab
-```
-
-Chrome ignores unknown flags but they show up in the full command line:
-
-```bash
-ps aux | grep pinchtab-instance
-```
-
-### Separate profile directory (built-in)
-
-Pinchtab already uses `~/.pinchtab/chrome-profile` by default — completely separate from your real Chrome profile. You'll see `--user-data-dir=/.../.pinchtab/...` in the process args.
-
-### Full example
-
-```bash
-CHROME_BINARY=/usr/local/bin/pinchtab-chrome \
-BRIDGE_PROFILE=~/.pinchtab/bot-prod \
-BRIDGE_HEADLESS=true \
-CHROME_FLAGS="--pinchtab-id=prod-scraper-01" \
-./pinchtab
-```
-
-> **Tip:** [Chrome for Testing](https://googlechromelabs.github.io/chrome-for-testing/) provides standalone Chrome binaries perfect for this — no installer needed, won't conflict with your system Chrome.
+See **[docs/identifying-instances.md](docs/identifying-instances.md)** for the full guide with examples.
 
 ## Architecture
 
