@@ -159,7 +159,8 @@ const hardwareCore = 2 + Math.floor(seededRandom(sessionSeed) * 6) * 2;
 const deviceMem = [2, 4, 8, 16][Math.floor(seededRandom(sessionSeed * 2) * 4)];
 
 Object.defineProperty(navigator, 'hardwareConcurrency', {
-  get: () => hardwareCore
+  get: () => hardwareCore,
+  configurable: true
 });
 
 Object.defineProperty(navigator, 'deviceMemory', {
