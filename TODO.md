@@ -24,7 +24,7 @@ tab limit (`BRIDGE_MAX_TABS`, default 20), tab close error on bogus IDs.
 ### P4: Quality of Life
 - [ ] **Headed mode testing** — Run Section 2 tests to validate non-headless.
 - [ ] **Ad blocking** — Basic tracker blocking for cleaner snapshots.
-- [ ] **Randomized window sizes** — Avoid automation fingerprint.
+- [x] **Randomized window sizes** — Avoid automation fingerprint. (8 common resolutions, random per launch)
 
 ### Code Quality
 - [ ] **installStableBinary streaming** — Use `io.Copy` with file streams instead of reading entire binary into memory.
