@@ -119,6 +119,8 @@ Headed mode is for mixed human + agent workflows:
 - Agent continues through HTTP API against the same profile
 - Team can watch automation behavior in real time
 
+See **[docs/headed-mode-guide.md](docs/headed-mode-guide.md)** for use cases of the headed mode.
+
 You can run headed mode in two ways:
 
 1. Single local instance:
@@ -295,6 +297,8 @@ See **[docs/chrome-lifecycle.md](docs/chrome-lifecycle.md)** for the full deep d
 └─────────────┘                   └──────────────┘                └─────────┘
 ```
 
+See **[docs/pinchtab-architecture.md](docs/pinchtab-architecture.md)**
+
 ## Why Not Screenshots?
 
 | | Screenshots | Accessibility Tree |
@@ -417,8 +421,8 @@ Pinchtab is built to work seamlessly with [OpenClaw](https://openclaw.ai) — th
 
 <a href="https://star-history.com/#pinchtab/pinchtab&Date">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=pinchtab/pinchtab&type=Date&theme=dark&v=20260219" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=pinchtab/pinchtab&type=Date&v=20260219" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=pinchtab/pinchtab&type=Date&v=20260219" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=pinchtab/pinchtab&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=pinchtab/pinchtab&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=pinchtab/pinchtab&type=Date" />
  </picture>
 </a>

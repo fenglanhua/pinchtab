@@ -1,4 +1,8 @@
-# Headed Mode: When Your Agent Needs a Human in the Loop
+# Headed Mode
+
+<div align="center" style="padding: 12px 0;">
+  <img src="../assets/pinchtab-headed.png" width="256" alt="headed mode" />
+</div>
 
 Most browser automation assumes you're either fully automated or fully manual. Real workflows aren't like that.
 
@@ -217,7 +221,15 @@ The dashboard has three views:
 - **Live** — real-time screencast of what the browser is showing right now. You're literally watching your agent browse. <!-- screenshot: live-tab.png -->
 - **Logs** — open tabs, connected agents, activity stats, instance logs
 
-**Agents** — every agent that's made an API call, across all running profiles. You see their ID, which profile they're using, their last action, and when they were last active. The Activity Feed shows a real-time stream of every navigate, snapshot, and action — filterable by type. <!-- screenshot: agents-view.png -->
+<div align="center" style="padding: 12px 0;">
+  <img src="../assets/live-view.png" width="400" alt="Pinchtab live view" style="padding: 8px;" />
+</div>
+
+**Agents** — every agent that's made an API call, across all running profiles. You see their ID, which profile they're using, their last action, and when they were last active. The Activity Feed shows a real-time stream of every navigate, snapshot, and action — filterable by type. 
+
+<div align="center" style="padding: 12px 0;">
+  <img src="../assets/agents-feed.png" width="400" alt="Pinchtab agents feed" style="padding: 8px;" />
+</div>
 
 **Settings** — screencast quality, stealth level, browser options.
 
