@@ -63,7 +63,7 @@ func newMockServer() *mockServer {
 	return m
 }
 
-func (m *mockServer) close() { m.server.Close() }
+func (m *mockServer) close()       { m.server.Close() }
 func (m *mockServer) base() string { return m.server.URL }
 
 // --- navigate tests ---
