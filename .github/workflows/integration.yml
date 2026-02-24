@@ -9,8 +9,6 @@ on:
 
 permissions:
   contents: read
-  checks: write
-  pull-requests: write
 
 jobs:
   integration:
@@ -33,22 +31,8 @@ jobs:
           echo "CHROME_BINARY=/usr/bin/google-chrome" >> $GITHUB_ENV
 
       - name: Run integration tests
-        run: go test -tags integration -v -timeout 10m -count=1 -json ./tests/integration/ | tee integration-results.json
+        run: go test -tags integration -v -timeout 10m -count=1 ./tests/integration/
         env:
           BRIDGE_HEADLESS: "true"
           BRIDGE_NO_RESTORE: "true"
           PINCHTAB_TEST_PORT: "19867"
-        continue-on-error: true
-
-      - name: Convert to JUnit XML
-        run: |
-          go install github.com/jstemmer/go-junit-report/v2@latest
-          cat integration-results.json | go-junit-report -set-exit-code > integration-report.xml || true
-        if: always()
-
-      - name: Publish integration test results
-        uses: EnricoMi/publish-unit-test-result-action@v2
-        if: always()
-        with:
-          files: integration-report.xml
-          check_name: Integration Test Results
