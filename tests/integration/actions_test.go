@@ -212,3 +212,65 @@ func TestAction_BatchEmpty(t *testing.T) {
 		t.Errorf("expected 400 for empty batch, got %d", code)
 	}
 }
+
+// A6: Hover
+func TestAction_Hover(t *testing.T) {
+	navigate(t, "https://example.com")
+
+	// Get snapshot to find a link ref
+	_, snapBody := httpGet(t, "/snapshot?filter=interactive&format=text")
+	s := string(snapBody)
+
+	// Find a link ref
+	ref := findRef(s, "link")
+	if ref == "" {
+		t.Skip("no link ref found in snapshot")
+	}
+
+	code, _ := httpPost(t, "/action", map[string]string{
+		"kind": "hover",
+		"ref":  ref,
+	})
+	if code != 200 {
+		t.Errorf("hover failed with %d", code)
+	}
+}
+
+// A7: Select
+func TestAction_Select(t *testing.T) {
+	navigate(t, "https://httpbin.org/forms/post")
+
+	// Get snapshot to find a select element
+	_, snapBody := httpGet(t, "/snapshot?filter=interactive&format=text")
+	ref := findRef(string(snapBody), "combobox")
+	if ref == "" {
+		ref = findRef(string(snapBody), "select")
+	}
+	if ref == "" {
+		t.Skip("no select ref found in snapshot")
+	}
+
+	code, _ := httpPost(t, "/action", map[string]any{
+		"kind":  "select",
+		"ref":   ref,
+		"value": "opt1",
+	})
+	if code != 200 {
+		t.Errorf("select failed with %d", code)
+	}
+}
+
+// A13: No tab
+func TestAction_NoTab(t *testing.T) {
+	navigate(t, "https://example.com")
+
+	code, _ := httpPost(t, "/action", map[string]string{
+		"kind":  "click",
+		"ref":   "e0",
+		"tabId": "nonexistent_xyz",
+	})
+	// Should be an error (not 200)
+	if code == 200 {
+		t.Error("expected error for nonexistent tab")
+	}
+}
