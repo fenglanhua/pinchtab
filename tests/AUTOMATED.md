@@ -98,6 +98,9 @@ This document tracks which scenarios from the test plan are now covered by autom
 
 The following scenarios require manual testing or deployment-specific setups:
 
+### Manual Verification (Fix Verified in Code)
+- ✅ **CF3-Extended** — CDP_URL mode (fix verified, needs manual test to confirm: `manual/cf3-cdp-create-tab-repro.md`)
+
 ### Not Yet Automated
 - **N3** — SPA title handling (x.com heavy SPA)
 - **N8** — Navigation timeout behavior
