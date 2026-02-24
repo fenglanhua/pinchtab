@@ -59,7 +59,7 @@ The typical agent loop:
 
 Refs (e.g. `e0`, `e5`, `e12`) are cached per tab after each snapshot — no need to re-snapshot before every action unless the page changed significantly.
 
-### Quick examples (CLI)
+### Quick examples
 
 ```bash
 pinchtab nav https://example.com
@@ -69,29 +69,12 @@ pinchtab type e12 hello world
 pinchtab press Enter
 pinchtab text                          # readable text (~1K tokens)
 pinchtab text | jq .text               # pipe to jq
+pinchtab ss -o page.jpg                # screenshot
+pinchtab eval "document.title"         # run JavaScript
+pinchtab pdf -o page.pdf               # export PDF
 ```
 
-### Quick examples (curl)
-
-```bash
-curl -X POST http://localhost:9867/navigate \
-  -H 'Content-Type: application/json' \
-  -d '{"url": "https://example.com"}'
-
-curl "http://localhost:9867/snapshot?filter=interactive&format=compact"
-
-curl -X POST http://localhost:9867/action \
-  -H 'Content-Type: application/json' \
-  -d '{"kind": "click", "ref": "e5"}'
-
-curl -X POST http://localhost:9867/action \
-  -H 'Content-Type: application/json' \
-  -d '{"kind": "type", "ref": "e12", "text": "hello world"}'
-
-curl http://localhost:9867/text
-```
-
-For the full API (download, upload, screenshot, evaluate, tabs, cookies, stealth, batch actions), see [references/api.md](references/api.md).
+For the full HTTP API (curl examples, download, upload, cookies, stealth, batch actions), see [references/api.md](references/api.md).
 
 ## Token Cost Guide
 
