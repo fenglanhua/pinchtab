@@ -30,23 +30,66 @@ metadata:
 
 Fast, lightweight browser control for AI agents via HTTP + accessibility tree.
 
+**Security Note:** Pinchtab runs a local Chrome browser under your control. It does not access your credentials, exfiltrate data, or connect to external services. All interactions stay local unless you explicitly navigate to external sites. Binary distributed via [GitHub releases](https://github.com/pinchtab/pinchtab/releases) with checksums. See [TRUST.md](TRUST.md) for full security model and VirusTotal flag explanation.
+
+## Quick Start (Agent Workflow)
+
+The 30-second pattern for browser tasks:
+
+```bash
+# 1. Start Pinchtab (runs forever, local on :9867)
+pinchtab &
+
+# 2. In your agent, follow this loop:
+#    a) Navigate to a URL
+#    b) Snapshot the page (get refs like e0, e5, e12)
+#    c) Act on a ref (click e5, type e12 "search text")
+#    d) Snapshot again to see the result
+#    e) Repeat step c-d until done
+```
+
+**That's it.** Refs are stable—you don't need to re-snapshot before every action. Only snapshot when the page changes significantly.
+
 ## Setup
 
 ```bash
-# Headless (default)
+# Headless (default) — no visible window
 pinchtab &
 
-# Headed — visible Chrome for human + agent workflows
+# Headed — visible Chrome window for human debugging
 BRIDGE_HEADLESS=false pinchtab &
 
-# Dashboard/orchestrator — profile manager + launcher
+# With auth token
+BRIDGE_TOKEN="your-secret-token" pinchtab &
+
+# Custom port
+BRIDGE_PORT=8080 pinchtab &
+
+# Dashboard/orchestrator — profile manager + tab launcher
 pinchtab dashboard &
 ```
 
-Default port: `9867`. Auth: set `BRIDGE_TOKEN=<secret>` and pass `Authorization: Bearer <secret>`.
+Default: **port 9867**, no auth required (local). Set `BRIDGE_TOKEN` for remote access.
 
-For dashboard/profile workflows, see [references/profiles.md](references/profiles.md).
-For all environment variables, see [references/env.md](references/env.md).
+For advanced setup, see [references/profiles.md](references/profiles.md) and [references/env.md](references/env.md).
+
+## What a Snapshot Looks Like
+
+After calling `/snapshot`, you get the page's accessibility tree as JSON—flat list of elements with refs:
+
+```json
+{
+  "refs": [
+    {"id": "e0", "role": "link", "text": "Sign In", "selector": "a[href='/login']"},
+    {"id": "e1", "role": "textbox", "label": "Email", "selector": "input[name='email']"},
+    {"id": "e2", "role": "button", "text": "Submit", "selector": "button[type='submit']"}
+  ],
+  "text": "... readable text version of page ...",
+  "title": "Login Page"
+}
+```
+
+Then you act on refs: `click e0`, `type e1 "user@example.com"`, `press e2 Enter`.
 
 ## Core Workflow
 
