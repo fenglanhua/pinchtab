@@ -1,5 +1,7 @@
 # Release Process
 
+**⚠️ CRITICAL:** The npm package depends on Go binaries being in the GitHub release. The release pipeline will fail hard if goreleaser doesn't upload binaries — npm users won't get a working binary.
+
 Pinchtab uses an automated CI/CD pipeline triggered by Git tags. When you push a tag like `v0.7.0`, GitHub Actions:
 
 1. **Builds Go binaries** — darwin-arm64, darwin-x64, linux-x64, linux-arm64, windows-x64
@@ -34,6 +36,29 @@ cat package.json | jq .version     # npm package
 cat go.mod | grep "module"         # Go module
 git describe --tags                # latest tag
 ```
+
+## Pre-Release Checklist
+
+Before tagging, verify goreleaser config:
+
+```bash
+# 1. Check .goreleaser.yml has binaries section (required for npm)
+grep -A 5 "^builds:" .goreleaser.yml
+
+# 2. Verify checksums enabled (required for postinstall verification)
+grep "checksum:" .goreleaser.yml
+
+# 3. Check release config points to GitHub
+grep -A 2 "^release:" .goreleaser.yml
+
+# 4. (optional) Test locally with goreleaser
+goreleaser release --skip=publish --clean
+```
+
+**Must have:**
+- ✅ `builds:` section with all platforms
+- ✅ `checksum:` section (generates checksums.txt)
+- ✅ `release:` section with GitHub owner
 
 ## Releasing
 
