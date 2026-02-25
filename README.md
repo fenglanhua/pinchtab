@@ -273,7 +273,7 @@ In headed mode, log into sites in the visible Chrome window once; cookies and lo
 The same `pinchtab` binary doubles as a CLI client. Start the server, then use subcommands:
 
 ```bash
-pinchtab nav https://example.com        # Navigate
+pinchtab nav https://httpbin.org/html    # Navigate
 pinchtab snap -i -c                      # Snapshot (interactive, compact)
 pinchtab click e5                        # Click element by ref
 pinchtab type e12 hello world            # Type into element
@@ -283,7 +283,7 @@ pinchtab ss -o page.jpg                  # Screenshot
 pinchtab eval "document.title"           # Run JavaScript
 pinchtab pdf -o page.pdf --landscape     # Export PDF
 pinchtab tabs                            # List tabs
-pinchtab tabs new https://example.com    # Open new tab
+pinchtab tabs new https://httpbin.org    # Open new tab
 pinchtab health                          # Check server
 ```
 

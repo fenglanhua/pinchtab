@@ -135,7 +135,7 @@ show_next_steps() {
     echo -e "    ${MUTED}curl http://localhost:9867/health${NC}"
     echo ""
     echo "  Or navigate & snapshot:"
-    echo -e "    ${MUTED}pinchtab nav https://example.com${NC}"
+    echo -e "    ${MUTED}pinchtab nav https://httpbin.org/html${NC}"
     echo -e "    ${MUTED}pinchtab snap | jq .count${NC}"
     echo ""
     echo "  Documentation:"
