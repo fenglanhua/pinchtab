@@ -14,7 +14,17 @@ or globally:
 npm install -g pinchtab
 ```
 
-This downloads the Pinchtab binary for your platform (macOS, Linux, Windows) on install.
+On install, the postinstall script automatically:
+1. Detects your OS and CPU architecture
+2. Downloads the precompiled Pinchtab binary from GitHub Releases
+3. Verifies integrity (SHA256 checksum)
+4. Stores in `~/.pinchtab/bin/<version>/` (version-specific to avoid conflicts)
+5. Makes it executable
+
+**Requirements:**
+- Internet connection on first install
+- Node.js 16+
+- macOS, Linux, or Windows
 
 ### Proxy Support
 
@@ -134,8 +144,22 @@ await pinch.start(binaryPath);
 
 ## Troubleshooting
 
-**Binary not found after install:**
+**Binary not found or "file not found" error:**
+
+Check if the release has binaries:
 ```bash
+# Should show pinchtab-darwin-arm64, pinchtab-linux-x64, etc.
+curl -s https://api.github.com/repos/pinchtab/pinchtab/releases/latest | jq '.assets[].name'
+```
+
+If no binaries (only Docker images), rebuild with a newer release:
+```bash
+npm rebuild pinchtab
+```
+
+Or use a custom binary:
+```bash
+export PINCHTAB_BINARY_PATH=/path/to/pinchtab
 npm rebuild pinchtab
 ```
 

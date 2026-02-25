@@ -70,16 +70,25 @@ If you need to re-release an existing tag:
 
 ## Pipeline details
 
-### 1. Goreleaser (Go binary)
+### 1. Goreleaser (Go binary) — CRITICAL for npm
 
 Triggered on `v*` tag push. Builds binaries and creates GitHub release.
 
 **What it does:**
-- Compiles for all platforms
-- Generates `checksums.txt` (SHA256)
-- Uploads to GitHub Releases
+- ✅ Compiles for all platforms (darwin-arm64, darwin-x64, linux-x64, linux-arm64, windows-x64)
+- ✅ Generates `checksums.txt` (SHA256)
+- ✅ **Uploads binaries to GitHub Releases** ← Required by npm postinstall!
+- Also: Docker images, changelog, etc.
+
+**⚠️ CRITICAL:** npm postinstall script downloads binaries from GitHub Releases. If the release doesn't have the binaries (e.g., only Docker images), `npm install pinchtab` will fail silently and the binary won't be available.
 
 **Configured in:** `.goreleaser.yml`
+
+**Verify release has binaries:**
+```bash
+curl -s https://api.github.com/repos/pinchtab/pinchtab/releases/v0.7.0 | jq '.assets[].name'
+# Should output: pinchtab-darwin-arm64, pinchtab-darwin-x64, etc.
+```
 
 ### 2. npm publish
 
@@ -89,16 +98,21 @@ Depends on: `release` job (waits for goreleaser to finish)
 - Syncs version from tag (v0.7.0 → 0.7.0)
 - Builds TypeScript (`npm run build`)
 - Publishes to npm registry
-- Postinstall script will download binaries from GitHub Releases
+- Users get postinstall script that downloads binaries from GitHub Releases
 
-**Key point:** Users who `npm install pinchtab` will:
-```bash
-1. Download npm package
-2. Run postinstall script
-3. Postinstall fetches binary from GitHub releases
-4. Verifies checksum (SHA256)
-5. Makes executable
+**User flow on `npm install pinchtab`:**
 ```
+1. npm downloads @pinchtab/cli package
+2. Runs postinstall script
+3. Script detects OS/arch (darwin-arm64, linux-x64, etc.)
+4. Downloads binary from GitHub release
+5. Verifies SHA256 checksum
+6. Stores in ~/.pinchtab/bin/0.7.0/pinchtab-<os>-<arch>
+7. Makes executable
+8. If ANY STEP fails → npm install fails (exit 1)
+```
+
+**⚠️ REQUIRES:** Goreleaser must have successfully uploaded binaries to GitHub release. The npm postinstall will verify this and fail hard if binaries are missing.
 
 ### 3. Docker
 

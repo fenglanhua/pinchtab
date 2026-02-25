@@ -11,7 +11,6 @@ dist/
 
 # npm package
 npm/node_modules/
-npm/package-lock.json
 
 # OpenClaw workspace files (should never be committed)
 .openclaw/

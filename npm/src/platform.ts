@@ -38,11 +38,18 @@ export function getBinDir(): string {
   return path.join(process.env.HOME || process.env.USERPROFILE || '', '.pinchtab', 'bin');
 }
 
-export function getBinaryPath(binaryName: string): string {
-  // Allow override via environment variable
+export function getBinaryPath(binaryName: string, version?: string): string {
+  // Allow override via environment variable (for Docker, custom builds, etc.)
   if (process.env.PINCHTAB_BINARY_PATH) {
     return process.env.PINCHTAB_BINARY_PATH;
   }
 
+  // Version-specific path: ~/.pinchtab/bin/0.7.0/pinchtab-darwin-arm64
+  // This allows multiple versions to coexist and prevents silent overwrites
+  if (version) {
+    return path.join(getBinDir(), version, binaryName);
+  }
+
+  // Fallback to version-less for backwards compat
   return path.join(getBinDir(), binaryName);
 }

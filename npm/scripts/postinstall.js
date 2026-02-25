@@ -128,7 +128,9 @@ function verifySHA256(filePath, expectedHash) {
 
 async function downloadBinary(platform, version) {
   const binaryName = getBinaryName(platform);
-  const binaryPath = getBinaryPath(binaryName);
+  const binDir = getBinDir();
+  const versionDir = path.join(binDir, version);
+  const binaryPath = path.join(versionDir, binaryName);
 
   // Skip if already exists
   if (fs.existsSync(binaryPath)) {
@@ -143,17 +145,17 @@ async function downloadBinary(platform, version) {
   if (!checksums.has(binaryName)) {
     throw new Error(
       `Binary not found in checksums: ${binaryName}\n` +
-      `Available: ${Array.from(checksums.keys()).join(', ')}`
+      `Available: ${Array.from(checksums.keys()).join(', ')}\n` +
+      `\nMake sure v${version} release has binaries compiled (not just Docker images).`
     );
   }
 
   const expectedHash = checksums.get(binaryName);
   const downloadUrl = `https://github.com/${GITHUB_REPO}/releases/download/v${version}/${binaryName}`;
 
-  // Ensure directory exists (unless using custom PINCHTAB_BINARY_PATH)
-  const binDir = path.dirname(binaryPath);
-  if (!fs.existsSync(binDir)) {
-    fs.mkdirSync(binDir, { recursive: true });
+  // Ensure version-specific directory exists
+  if (!fs.existsSync(versionDir)) {
+    fs.mkdirSync(versionDir, { recursive: true });
   }
 
   // Download binary
@@ -205,7 +207,31 @@ async function downloadBinary(platform, version) {
   try {
     const platform = detectPlatform();
     const version = getVersion();
-    await downloadBinary(platform, version);
+    
+    // Ensure binary was successfully downloaded
+    // (If PINCHTAB_BINARY_PATH is set, skip download but trust the binary exists)
+    if (!process.env.PINCHTAB_BINARY_PATH) {
+      const binaryPath = getBinaryPath(getBinaryName(platform));
+      const binDir = path.dirname(binaryPath);
+      
+      // Create version-specific directory
+      const versionDir = path.join(binDir, version);
+      if (!fs.existsSync(versionDir)) {
+        fs.mkdirSync(versionDir, { recursive: true });
+      }
+      
+      await downloadBinary(platform, version);
+      
+      // Verify binary exists after download
+      const finalPath = path.join(versionDir, getBinaryName(platform));
+      if (!fs.existsSync(finalPath)) {
+        throw new Error(
+          `Binary was not successfully downloaded to ${finalPath}\n` +
+          `This usually means the GitHub release doesn't have the binary for your platform.`
+        );
+      }
+    }
+    
     console.log('✓ Pinchtab setup complete');
     process.exit(0);
   } catch (err) {
@@ -218,6 +244,9 @@ async function downloadBinary(platform, version) {
     if (process.env.HTTPS_PROXY || process.env.HTTP_PROXY) {
       console.error('  • Check proxy settings (HTTPS_PROXY / HTTP_PROXY)');
     }
+    console.error('\nFor Docker or custom binaries:');
+    console.error('  export PINCHTAB_BINARY_PATH=/path/to/pinchtab');
+    console.error('  npm rebuild pinchtab');
     process.exit(1);
   }
 })();

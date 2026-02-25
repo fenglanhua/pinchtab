@@ -91,7 +91,7 @@ function verifySHA256(filePath: string, expectedHash: string): boolean {
 
 async function downloadBinary(platform: any, version: string): Promise<void> {
   const binaryName = getBinaryName(platform);
-  const binaryPath = getBinaryPath(binaryName);
+  const binaryPath = getBinaryPath(binaryName, version);
 
   // Skip if already exists
   if (fs.existsSync(binaryPath)) {
@@ -170,5 +170,5 @@ export async function ensureBinary(): Promise<string> {
   await downloadBinary(platform, version);
 
   const binaryName = getBinaryName(platform);
-  return getBinaryPath(binaryName);
+  return getBinaryPath(binaryName, version);
 }

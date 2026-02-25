@@ -20,12 +20,26 @@ function getBinaryName() {
   throw new Error(`Unsupported platform: ${platform}`);
 }
 
+function getVersion() {
+  const pkgPath = path.join(__dirname, '..', 'package.json');
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+  return pkg.version;
+}
+
 function getBinaryPath() {
-  // Allow override via environment variable
+  // Allow override via environment variable (for Docker, custom builds)
   if (process.env.PINCHTAB_BINARY_PATH) {
     return process.env.PINCHTAB_BINARY_PATH;
   }
 
+  // Try version-specific path first: ~/.pinchtab/bin/0.7.0/pinchtab-darwin-arm64
+  const version = getVersion();
+  const versionedPath = path.join(os.homedir(), '.pinchtab', 'bin', version, getBinaryName());
+  if (fs.existsSync(versionedPath)) {
+    return versionedPath;
+  }
+
+  // Fallback to version-less for backwards compat
   return path.join(os.homedir(), '.pinchtab', 'bin', getBinaryName());
 }
 

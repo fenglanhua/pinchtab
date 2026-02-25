@@ -141,7 +141,10 @@ export class Pinchtab {
   private async getBinaryPathInternal(): Promise<string> {
     const platform = detectPlatform();
     const binaryName = getBinaryName(platform);
-    const binaryPath = getBinaryPath(binaryName);
+    
+    // Try version-specific path first
+    const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf-8'));
+    const binaryPath = getBinaryPath(binaryName, pkg.version);
 
     if (!fs.existsSync(binaryPath)) {
       throw new Error(
