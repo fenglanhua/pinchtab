@@ -132,6 +132,28 @@ For the full HTTP API (curl examples, download, upload, cookies, stealth, batch 
 
 **Strategy**: Start with `?filter=interactive&format=compact`. Use `?diff=true` on subsequent snapshots. Use `/text` when you only need readable content. Full `/snapshot` only when needed.
 
+## Agent Optimization
+
+**Validated Feb 2026**: Testing with AI agents revealed a critical pattern for reliable, token-efficient scraping.
+
+**See the full guide:** [docs/agent-optimization.md](../../docs/agent-optimization.md)
+
+### Quick Summary
+
+**The 3-second pattern** — wait after navigate before snapshot:
+
+```bash
+curl -X POST http://localhost:9867/navigate \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com"}' && \
+sleep 3 && \
+curl http://localhost:9867/snapshot | jq '.nodes[] | select(.name | length > 15) | .name'
+```
+
+**Token savings:** 93% reduction (3,842 → 272 tokens) when using prescriptive instructions vs. exploratory agent approach.
+
+For detailed findings, system prompt templates, and site-specific notes, see [docs/agent-optimization.md](../../docs/agent-optimization.md).
+
 ## Tips
 
 - **Always pass `tabId` explicitly** when working with multiple tabs
@@ -140,3 +162,4 @@ For the full HTTP API (curl examples, download, upload, cookies, stealth, batch 
 - Pinchtab persists sessions — tabs survive restarts (disable with `BRIDGE_NO_RESTORE=true`)
 - Chrome profile is persistent — cookies/logins carry over between runs
 - Use `BRIDGE_BLOCK_IMAGES=true` or `"blockImages": true` on navigate for read-heavy tasks
+- **Wait 3+ seconds after navigate before snapshot** — Chrome needs time to render 2000+ accessibility tree nodes
