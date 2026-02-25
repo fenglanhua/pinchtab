@@ -13,10 +13,17 @@ builds:
       - arm64
 
 archives:
-  - format_overrides:
-      - goos: windows
-        format: zip
-    name_template: "pinchtab-{{.Os}}-{{.Arch}}"
+  # Linux and macOS: bare binary
+  - format: binary
+    name_template: "pinchtab-{{ .Os }}-{{ .Arch }}"
+    goos:
+      - linux
+      - darwin
+  # Windows: .exe extension
+  - format: binary
+    name_template: "pinchtab-{{ .Os }}-{{ .Arch }}.exe"
+    goos:
+      - windows
 
 checksum:
   name_template: checksums.txt

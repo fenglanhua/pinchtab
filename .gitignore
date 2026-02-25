@@ -3,6 +3,15 @@ browser-bridge
 /pinchtab
 coverage.out
 
+# Build artifacts
+dist/
+*.js
+!scripts/**/*.js
+!npm/bin/pinchtab
+
+# npm package
+npm/node_modules/
+
 # OpenClaw workspace files (should never be committed)
 .openclaw/
 SOUL.md
