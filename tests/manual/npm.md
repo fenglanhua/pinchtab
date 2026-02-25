@@ -40,7 +40,7 @@ Test that the npm package correctly:
 
 ## Execution
 ```bash
-npm test
+cd npm && npm test
 ```
 
 ---
