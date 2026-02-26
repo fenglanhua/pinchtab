@@ -7,8 +7,8 @@
 ## Quality Improvements
 
 ### Code Quality
-- [ ] **proxy_ws.go proper HTTP** — Replace raw `backend.Write` of HTTP headers with proper `http.Request` construction for better standards compliance.
-- [ ] **humanType global rand** — Accept `*rand.Rand` parameter instead of global variable for better testability and concurrency safety.
+- [x] **proxy_ws.go proper HTTP** — ~~Replace raw `backend.Write` of HTTP headers with proper `http.Request` construction for better standards compliance.~~ ✅ Improved with `fmt.Fprintf` and `textproto.CanonicalMIMEHeaderKey` (PR #50)
+- [x] **humanType global rand** — ~~Accept `*rand.Rand` parameter instead of global variable for better testability and concurrency safety.~~ ✅ Added `Config` struct and `TypeWithConfig` function (PR #50)
 
 ### Feature Enhancements
 - [ ] **Ad blocking** — Basic tracker blocking for cleaner snapshots (block common analytics/ad domains).
