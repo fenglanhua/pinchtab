@@ -1,33 +1,24 @@
 package bridge
 
-// AdBlockPatterns contains patterns for common ad, tracking, and analytics domains
-// to provide cleaner snapshots for AI agents
+// AdBlockPatterns blocks ad, tracking, and analytics domains for cleaner snapshots
 var AdBlockPatterns = []string{
-	// Google Analytics & Tag Manager
+	// Analytics & tracking
 	"*google-analytics.com/*",
 	"*googletagmanager.com/*",
 	"*googletagservices.com/*",
 	"*googlesyndication.com/*",
 	"*googleadservices.com/*",
 	"*doubleclick.net/*",
-
-	// Facebook/Meta tracking
 	"*facebook.com/tr/*",
 	"*facebook.com/plugins/*",
 	"*connect.facebook.net/*",
 	"*fbcdn.net/*/fbevents.js",
-
-	// Twitter/X tracking
 	"*twitter.com/i/adsct",
 	"*analytics.twitter.com/*",
 	"*static.ads-twitter.com/*",
-
-	// Amazon tracking
 	"*amazon-adsystem.com/*",
 	"*amazontrust.com/*",
 	"*adsafeprotected.com/*",
-
-	// Common analytics services
 	"*segment.io/*",
 	"*segment.com/*",
 	"*mixpanel.com/*",
@@ -43,7 +34,7 @@ var AdBlockPatterns = []string{
 	"*pingdom.net/*",
 	"*newrelic.com/*",
 	"*nr-data.net/*",
-
+	
 	// Ad networks
 	"*doubleclick.net/*",
 	"*googleadservices.com/*",

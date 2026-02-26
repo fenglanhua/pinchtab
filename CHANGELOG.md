@@ -5,6 +5,11 @@
 ### Added
 - **PDF export parameters** — `/pdf` API now supports full PrintToPDFParams: `paperWidth`, `paperHeight`, `marginTop`, `marginBottom`, `marginLeft`, `marginRight`, `pageRanges`, `displayHeaderFooter`, `headerTemplate`, `footerTemplate`, `generateTaggedPDF`, `generateDocumentOutline`, `preferCSSPageSize` (#45, PR #48)
 - **Installer branding** — install.sh now uses yellow accent color (#fbbf24) and crab icon 🦀 for consistency (PR #48)
+- **Ad blocking** — New `blockAds` option blocks 100+ tracking/analytics domains for cleaner snapshots. Available via env var `BRIDGE_BLOCK_ADS=true`, CLI flag `--block-ads`, and API parameter (#50)
+
+### Changed
+- **Human package testability** — Added `Config` struct and `TypeWithConfig` function to inject custom random source for deterministic testing (#50)
+- **WebSocket proxy standards** — Improved HTTP header formatting using `fmt.Fprintf` and `textproto.CanonicalMIMEHeaderKey` (#50)
 
 ### Docs
 - **Definition of Done** — Added DEFINITION_OF_DONE.md and GitHub PR template with streamlined, actionable checklist (PR #48)

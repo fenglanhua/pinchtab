@@ -51,10 +51,8 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		navTimeout = time.Duration(req.Timeout * float64(time.Second))
 	}
 
-	// Build block patterns based on request and config
 	var blockPatterns []string
 
-	// Handle explicit request overrides first
 	blockAds := h.Config.BlockAds
 	if req.BlockAds != nil {
 		blockAds = *req.BlockAds
@@ -70,7 +68,6 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		blockImages = *req.BlockImages
 	}
 
-	// Combine patterns based on flags
 	if blockAds {
 		blockPatterns = bridge.CombineBlockPatterns(blockPatterns, bridge.AdBlockPatterns)
 	}
@@ -78,7 +75,6 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	if blockMedia {
 		blockPatterns = bridge.CombineBlockPatterns(blockPatterns, bridge.MediaBlockPatterns)
 	} else if blockImages {
-		// Only block images if not already blocking all media
 		blockPatterns = bridge.CombineBlockPatterns(blockPatterns, bridge.ImageBlockPatterns)
 	}
 

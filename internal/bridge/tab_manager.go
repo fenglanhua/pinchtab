@@ -146,19 +146,18 @@ func (tm *TabManager) CreateTab(url string) (string, context.Context, context.Ca
 		tm.onTabSetup(ctx)
 	}
 
-	// Configure resource blocking based on settings
 	var blockPatterns []string
-
+	
 	if tm.config.BlockAds {
 		blockPatterns = CombineBlockPatterns(blockPatterns, AdBlockPatterns)
 	}
-
+	
 	if tm.config.BlockMedia {
 		blockPatterns = CombineBlockPatterns(blockPatterns, MediaBlockPatterns)
 	} else if tm.config.BlockImages {
 		blockPatterns = CombineBlockPatterns(blockPatterns, ImageBlockPatterns)
 	}
-
+	
 	if len(blockPatterns) > 0 {
 		_ = SetResourceBlocking(ctx, blockPatterns)
 	}
