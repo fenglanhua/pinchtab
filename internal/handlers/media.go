@@ -112,13 +112,65 @@ func (h *Handlers) HandlePDF(w http.ResponseWriter, r *http.Request) {
 	defer tCancel()
 	go web.CancelOnClientDone(r.Context(), tCancel)
 
+	// Parse PDF parameters from PrintToPDFParams
 	landscape := r.URL.Query().Get("landscape") == "true"
+	preferCSSPageSize := r.URL.Query().Get("preferCSSPageSize") == "true"
+	displayHeaderFooter := r.URL.Query().Get("displayHeaderFooter") == "true"
+	generateTaggedPDF := r.URL.Query().Get("generateTaggedPDF") == "true"
+	generateDocumentOutline := r.URL.Query().Get("generateDocumentOutline") == "true"
+
 	scale := 1.0
 	if s := r.URL.Query().Get("scale"); s != "" {
 		if sn, err := strconv.ParseFloat(s, 64); err == nil && sn > 0 {
 			scale = sn
 		}
 	}
+
+	paperWidth := 8.5 // Default letter width in inches
+	if w := r.URL.Query().Get("paperWidth"); w != "" {
+		if wn, err := strconv.ParseFloat(w, 64); err == nil && wn > 0 {
+			paperWidth = wn
+		}
+	}
+
+	paperHeight := 11.0 // Default letter height in inches
+	if h := r.URL.Query().Get("paperHeight"); h != "" {
+		if hn, err := strconv.ParseFloat(h, 64); err == nil && hn > 0 {
+			paperHeight = hn
+		}
+	}
+
+	marginTop := 0.4 // Default margins in inches (1cm)
+	if m := r.URL.Query().Get("marginTop"); m != "" {
+		if mn, err := strconv.ParseFloat(m, 64); err == nil && mn >= 0 {
+			marginTop = mn
+		}
+	}
+
+	marginBottom := 0.4
+	if m := r.URL.Query().Get("marginBottom"); m != "" {
+		if mn, err := strconv.ParseFloat(m, 64); err == nil && mn >= 0 {
+			marginBottom = mn
+		}
+	}
+
+	marginLeft := 0.4
+	if m := r.URL.Query().Get("marginLeft"); m != "" {
+		if mn, err := strconv.ParseFloat(m, 64); err == nil && mn >= 0 {
+			marginLeft = mn
+		}
+	}
+
+	marginRight := 0.4
+	if m := r.URL.Query().Get("marginRight"); m != "" {
+		if mn, err := strconv.ParseFloat(m, 64); err == nil && mn >= 0 {
+			marginRight = mn
+		}
+	}
+
+	pageRanges := r.URL.Query().Get("pageRanges") // e.g., "1-3,5"
+	headerTemplate := r.URL.Query().Get("headerTemplate")
+	footerTemplate := r.URL.Query().Get("footerTemplate")
 
 	var buf []byte
 	if err := chromedp.Run(tCtx,
@@ -127,7 +179,28 @@ func (h *Handlers) HandlePDF(w http.ResponseWriter, r *http.Request) {
 			p := page.PrintToPDF().
 				WithPrintBackground(true).
 				WithScale(scale).
-				WithLandscape(landscape)
+				WithLandscape(landscape).
+				WithPaperWidth(paperWidth).
+				WithPaperHeight(paperHeight).
+				WithMarginTop(marginTop).
+				WithMarginBottom(marginBottom).
+				WithMarginLeft(marginLeft).
+				WithMarginRight(marginRight).
+				WithPreferCSSPageSize(preferCSSPageSize).
+				WithDisplayHeaderFooter(displayHeaderFooter).
+				WithGenerateTaggedPDF(generateTaggedPDF).
+				WithGenerateDocumentOutline(generateDocumentOutline)
+
+			if pageRanges != "" {
+				p = p.WithPageRanges(pageRanges)
+			}
+			if headerTemplate != "" {
+				p = p.WithHeaderTemplate(headerTemplate)
+			}
+			if footerTemplate != "" {
+				p = p.WithFooterTemplate(footerTemplate)
+			}
+
 			buf, _, err = p.Do(ctx)
 			return err
 		}),
