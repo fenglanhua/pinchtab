@@ -1,0 +1,149 @@
+/* Emoji Colorization System
+   Using CSS filters to apply consistent colors to emoji icons */
+
+:root {
+  /* Define filter combinations for different colors */
+  --emoji-filter-blue: grayscale(100%) brightness(0.5) sepia(1) hue-rotate(180deg) saturate(5);
+  --emoji-filter-red: grayscale(100%) brightness(0.7) sepia(1) hue-rotate(0deg) saturate(5);
+  --emoji-filter-green: grayscale(100%) brightness(0.7) sepia(1) hue-rotate(90deg) saturate(5);
+  --emoji-filter-purple: grayscale(100%) brightness(0.6) sepia(1) hue-rotate(270deg) saturate(5);
+  --emoji-filter-orange: grayscale(100%) brightness(0.7) sepia(1) hue-rotate(30deg) saturate(5);
+  --emoji-filter-yellow: grayscale(100%) brightness(0.8) sepia(1) hue-rotate(45deg) saturate(5);
+  
+  /* Theme-aware filters */
+  --emoji-filter-primary: var(--emoji-filter-blue);
+  --emoji-filter-success: var(--emoji-filter-green);
+  --emoji-filter-warning: var(--emoji-filter-orange);
+  --emoji-filter-error: var(--emoji-filter-red);
+  --emoji-filter-muted: grayscale(100%) brightness(0.7);
+}
+
+/* Dark mode adjustments */
+:root.dark-mode {
+  --emoji-filter-blue: grayscale(100%) brightness(0.9) sepia(1) hue-rotate(180deg) saturate(3);
+  --emoji-filter-red: grayscale(100%) brightness(1) sepia(1) hue-rotate(0deg) saturate(3);
+  --emoji-filter-green: grayscale(100%) brightness(1) sepia(1) hue-rotate(90deg) saturate(3);
+  --emoji-filter-purple: grayscale(100%) brightness(0.9) sepia(1) hue-rotate(270deg) saturate(3);
+  --emoji-filter-orange: grayscale(100%) brightness(1) sepia(1) hue-rotate(30deg) saturate(3);
+  --emoji-filter-yellow: grayscale(100%) brightness(1.1) sepia(1) hue-rotate(45deg) saturate(3);
+}
+
+/* Base emoji wrapper class */
+.emoji {
+  display: inline-block;
+  /* Ensure filter applies properly */
+  font-style: normal;
+  line-height: 1;
+  /* Prevents text selection issues */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Color variants */
+.emoji-primary {
+  filter: var(--emoji-filter-primary);
+}
+
+.emoji-blue {
+  filter: var(--emoji-filter-blue);
+}
+
+.emoji-red {
+  filter: var(--emoji-filter-red);
+}
+
+.emoji-green {
+  filter: var(--emoji-filter-green);
+}
+
+.emoji-purple {
+  filter: var(--emoji-filter-purple);
+}
+
+.emoji-orange {
+  filter: var(--emoji-filter-orange);
+}
+
+.emoji-yellow {
+  filter: var(--emoji-filter-yellow);
+}
+
+.emoji-success {
+  filter: var(--emoji-filter-success);
+}
+
+.emoji-warning {
+  filter: var(--emoji-filter-warning);
+}
+
+.emoji-error {
+  filter: var(--emoji-filter-error);
+}
+
+.emoji-muted {
+  filter: var(--emoji-filter-muted);
+}
+
+/* Size variants */
+.emoji-sm {
+  font-size: 0.875em;
+}
+
+.emoji-lg {
+  font-size: 1.5em;
+}
+
+.emoji-xl {
+  font-size: 2em;
+}
+
+.emoji-2xl {
+  font-size: 3em;
+}
+
+/* Special cases for specific emojis that need adjustment */
+.emoji-crab { /* 🦀 */
+  filter: var(--emoji-filter-primary);
+}
+
+/* Animation for loading states */
+@keyframes emoji-pulse {
+  0%, 100% {
+    filter: var(--emoji-filter-muted);
+  }
+  50% {
+    filter: var(--emoji-filter-primary);
+  }
+}
+
+.emoji-pulse {
+  animation: emoji-pulse 2s ease-in-out infinite;
+}
+
+/* Hover effects */
+.emoji-hover:hover {
+  transform: scale(1.1);
+  transition: transform 0.2s ease;
+}
+
+/* Apply to specific UI elements */
+.app-brand .crab,
+.empty-state .crab,
+.modal h3 > span:first-child {
+  filter: var(--emoji-filter-primary);
+}
+
+/* Status indicators */
+.status-running .emoji {
+  filter: var(--emoji-filter-success);
+}
+
+.status-error .emoji,
+.error .emoji {
+  filter: var(--emoji-filter-error);
+}
+
+.status-warning .emoji,
+.warning .emoji {
+  filter: var(--emoji-filter-warning);
+}
