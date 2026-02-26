@@ -7,7 +7,18 @@ export interface Platform {
 
 export function detectPlatform(): Platform {
   const platform = process.platform as any;
-  const arch = process.arch === 'arm64' ? 'arm64' : 'amd64';
+
+  // Only support x64 (amd64) and arm64
+  let arch: 'amd64' | 'arm64';
+  if (process.arch === 'x64') {
+    arch = 'amd64';
+  } else if (process.arch === 'arm64') {
+    arch = 'arm64';
+  } else {
+    throw new Error(
+      `Unsupported architecture: ${process.arch}. ` + `Only x64 (amd64) and arm64 are supported.`
+    );
+  }
 
   const osMap: Record<string, 'darwin' | 'linux' | 'windows'> = {
     darwin: 'darwin',
