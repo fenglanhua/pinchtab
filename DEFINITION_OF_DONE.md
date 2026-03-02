@@ -12,6 +12,7 @@ These run automatically via `ci.yml`. If your PR fails them, fix and re-push.
 - [ ] **Error handling explicit** — All errors wrapped with `%w`, no silent failures
 - [ ] **No regressions** — Verify stealth, token efficiency, session persistence work (test locally if unsure)
 - [ ] **SOLID principles** — Functions do one thing, testable, no unnecessary deps
+- [ ] **No redundant comments** — Don't restate what the code already says; comments should explain *why*, not *what*
 
 ## Manual — Testing (Required)
 - [ ] **New/changed functionality has tests** — Same-package unit tests preferred; use mockBridge for integration

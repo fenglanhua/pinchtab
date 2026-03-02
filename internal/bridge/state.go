@@ -67,9 +67,6 @@ func WasUncleanExit(profileDir string) bool {
 	return strings.Contains(prefs, `"exit_type":"Crashed"`) || strings.Contains(prefs, `"exit_type": "Crashed"`)
 }
 
-// sessionRestoreFiles are the specific files Chrome uses for tab restore.
-// Deleting only these is faster and less likely to hit locks than nuking
-// the entire Sessions directory.
 var sessionRestoreFiles = []string{
 	"Current Session",
 	"Current Tabs",
@@ -98,9 +95,6 @@ func ClearChromeSessions(profileDir string) {
 	}
 }
 
-// retryRemove attempts to remove a single file with exponential backoff.
-// This handles Windows file lock errors where handles persist briefly
-// after Chrome exits.
 func retryRemove(path string, maxRetries int) error {
 	var err error
 	for attempt := 0; attempt < maxRetries; attempt++ {

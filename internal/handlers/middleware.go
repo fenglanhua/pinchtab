@@ -92,13 +92,19 @@ func RequestIDMiddleware(next http.Handler) http.Handler {
 }
 
 var (
-	rateMu      sync.Mutex
-	rateBuckets = map[string][]time.Time{}
+	rateMu             sync.Mutex
+	rateBuckets        = map[string][]time.Time{}
+	rateLimiterStarted sync.Once
+)
+
+const (
+	rateLimitWindow  = 10 * time.Second
+	rateLimitMaxReq  = 120
+	evictionInterval = 30 * time.Second
 )
 
 func RateLimitMiddleware(next http.Handler) http.Handler {
-	const window = 10 * time.Second
-	const maxReq = 120
+	startRateLimiterJanitor(rateLimitWindow, evictionInterval)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := strings.TrimSpace(r.URL.Path)
 		if p == "/health" || p == "/metrics" || strings.HasPrefix(p, "/health/") || strings.HasPrefix(p, "/metrics/") {
@@ -118,15 +124,15 @@ func RateLimitMiddleware(next http.Handler) http.Handler {
 		hits := rateBuckets[host]
 		filtered := hits[:0]
 		for _, t := range hits {
-			if now.Sub(t) < window {
+			if now.Sub(t) < rateLimitWindow {
 				filtered = append(filtered, t)
 			}
 		}
-		if len(filtered) >= maxReq {
+		if len(filtered) >= rateLimitMaxReq {
 			rateBuckets[host] = filtered
 			rateMu.Unlock()
 			atomic.AddUint64(&metricRateLimited, 1)
-			web.ErrorCode(w, 429, "rate_limited", "too many requests", true, map[string]any{"windowSec": int(window.Seconds()), "max": maxReq})
+			web.ErrorCode(w, 429, "rate_limited", "too many requests", true, map[string]any{"windowSec": int(rateLimitWindow.Seconds()), "max": rateLimitMaxReq})
 			return
 		}
 		rateBuckets[host] = append(filtered, now)
@@ -134,4 +140,34 @@ func RateLimitMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func startRateLimiterJanitor(window, interval time.Duration) {
+	rateLimiterStarted.Do(func() {
+		go func() {
+			ticker := time.NewTicker(interval)
+			defer ticker.Stop()
+			for now := range ticker.C {
+				evictStaleRateBuckets(now, window)
+			}
+		}()
+	})
+}
+
+func evictStaleRateBuckets(now time.Time, window time.Duration) {
+	rateMu.Lock()
+	defer rateMu.Unlock()
+	for host, hits := range rateBuckets {
+		filtered := hits[:0]
+		for _, t := range hits {
+			if now.Sub(t) < window {
+				filtered = append(filtered, t)
+			}
+		}
+		if len(filtered) == 0 {
+			delete(rateBuckets, host)
+		} else {
+			rateBuckets[host] = filtered
+		}
+	}
 }

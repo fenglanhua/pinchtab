@@ -14,11 +14,16 @@ func snapshotMetrics() map[string]any {
 	if total > 0 {
 		avgMs = float64(latencySum) / float64(total)
 	}
+	rateMu.Lock()
+	bucketHosts := len(rateBuckets)
+	rateMu.Unlock()
+
 	return map[string]any{
 		"requestsTotal":   total,
 		"requestsFailed":  failed,
 		"avgLatencyMs":    avgMs,
 		"rateLimited":     atomic.LoadUint64(&metricRateLimited),
 		"staleRefRetries": atomic.LoadUint64(&metricStaleRefRetries),
+		"rateBucketHosts": bucketHosts,
 	}
 }
