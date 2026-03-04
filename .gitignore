@@ -32,3 +32,8 @@ AGENTS.md
 *.test
 memory/
 pinchtab-small
+
+# Local development files
+MY_PROJECT_NOTES.md
+debug.log
+pinchtab.exe
