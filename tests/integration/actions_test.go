@@ -357,3 +357,53 @@ func TestAction_NoTab(t *testing.T) {
 		t.Error("expected error for nonexistent tab")
 	}
 }
+
+func TestAction_Fill_ActuallySetsValue(t *testing.T) {
+	navigate(t, "https://httpbin.org/forms/post")
+	defer closeCurrentTab(t)
+
+	_, snapBody := httpGet(t, "/snapshot?filter=interactive&format=text&tabId="+currentTabID)
+	ref := findRef(string(snapBody), "textbox")
+	if ref == "" {
+		ref = findRef(string(snapBody), "input")
+	}
+	if ref == "" {
+		t.Skip("no input ref found")
+	}
+
+	testValue := "test_fill_" + randomString(8)
+	code, _ := httpPost(t, "/action", map[string]any{
+		"tabId": currentTabID,
+		"kind":  "fill",
+		"ref":   ref,
+		"text":  testValue,
+	})
+	if code != 200 {
+		t.Fatalf("fill failed with %d", code)
+	}
+
+	_, snapBody2 := httpGet(t, "/snapshot?tabId="+currentTabID)
+	snapStr := string(snapBody2)
+
+	if !strings.Contains(snapStr, testValue) {
+		t.Errorf("fill did not set value - snapshot does not contain %q (issue #114: fill with ref no-ops)", testValue)
+		t.Logf("snapshot: %s", snapStr[:min(500, len(snapStr))])
+	}
+}
+
+// randomString generates a deterministic test value for unique snapshot verification
+func randomString(n int) string {
+	chars := "abcdefghijklmnopqrstuvwxyz0123456789"
+	result := ""
+	for i := 0; i < n; i++ {
+		result += string(chars[i%len(chars)])
+	}
+	return result
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}

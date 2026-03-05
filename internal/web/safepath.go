@@ -37,6 +37,12 @@ func SafePath(base, userPath string) (string, error) {
 	}
 
 	// Ensure resolved path is within or equal to base.
+	resolved, err = filepath.Abs(resolved)
+	if err != nil {
+		return "", fmt.Errorf("invalid resolved path: %w", err)
+	}
+
+	// Ensure resolved path is within or equal to base
 	if !strings.HasPrefix(resolved, absBase+string(filepath.Separator)) && resolved != absBase {
 		return "", fmt.Errorf("path %q escapes base directory %q", userPath, absBase)
 	}

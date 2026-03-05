@@ -1,4 +1,8 @@
 node_modules/
+.venv/
+plugins/*/.venv/
+__pycache__/
+*.pyc
 browser-bridge
 /pinchtab
 coverage.out
@@ -32,3 +36,8 @@ AGENTS.md
 *.test
 memory/
 pinchtab-small
+
+# Local development files
+MY_PROJECT_NOTES.md
+debug.log
+pinchtab.exe
