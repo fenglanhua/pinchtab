@@ -25,7 +25,7 @@ const (
 
 // ServerConfig holds configuration for a test server instance.
 type ServerConfig struct {
-	Port    string // Server port (default: "19867")
+	Port     string // Server port (default: "19867")
 	Headless bool   // Run Chrome headless (default: true)
 	Stealth  string // Stealth level (default: "light")
 }

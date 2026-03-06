@@ -96,11 +96,13 @@ func waitForInstanceReady(t *testing.T, instID string) {
 // Backward-compatible wrappers — delegate to testutil.Client.
 // Existing tests use these package-level functions; new tests should use client.* directly.
 
-func httpGet(t *testing.T, path string) (int, []byte)     { return client.Get(t, path) }
+func httpGet(t *testing.T, path string) (int, []byte)         { return client.Get(t, path) }
 func httpPost(t *testing.T, path string, p any) (int, []byte) { return client.Post(t, path, p) }
-func httpPostRaw(t *testing.T, path string, b string) (int, []byte) { return client.PostRaw(t, path, b) }
+func httpPostRaw(t *testing.T, path string, b string) (int, []byte) {
+	return client.PostRaw(t, path, b)
+}
 func httpPostWithRetry(t *testing.T, path string, body any, retries int) (int, []byte) {
 	return client.PostWithRetry(t, path, body, retries)
 }
 func jsonField(t *testing.T, data []byte, key string) string { return testutil.JSONField(t, data, key) }
-func findRepoRoot() string                                     { return testutil.FindRepoRoot() }
+func findRepoRoot() string                                   { return testutil.FindRepoRoot() }
