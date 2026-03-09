@@ -94,7 +94,7 @@ jobs:
               return;
             }
             
-            // Find existing comment
+            // Delete existing E2E comment so new one appears at end of thread
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -106,19 +106,19 @@ jobs:
             );
             
             if (botComment) {
-              await github.rest.issues.updateComment({
+              await github.rest.issues.deleteComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                comment_id: botComment.id,
-                body
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: prNumber,
-                body
+                comment_id: botComment.id
               });
             }
+            
+            // Create new comment at end of thread
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body
+            });
             
             console.log(`Posted comment to PR #${prNumber}`);
