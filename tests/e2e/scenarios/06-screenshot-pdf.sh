@@ -10,13 +10,7 @@ pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/table.html\"}"
 sleep 1
 
 pt_get /screenshot
-if [ "$HTTP_STATUS" = "200" ]; then
-  echo -e "  ${GREEN}✓${NC} Screenshot returned 200"
-  ((ASSERTIONS_PASSED++)) || true
-else
-  echo -e "  ${RED}✗${NC} Screenshot failed (status: $HTTP_STATUS)"
-  ((ASSERTIONS_FAILED++)) || true
-fi
+assert_ok "screenshot"
 
 end_test
 
@@ -35,7 +29,8 @@ start_test "pinchtab screenshot --tab <id>"
 pt_get /tabs
 TAB_ID=$(echo "$RESULT" | jq -r '.tabs[0].id')
 
-assert_status 200 "${PINCHTAB_URL}/tabs/${TAB_ID}/screenshot"
+pt_get "/tabs/${TAB_ID}/screenshot"
+assert_ok "tab screenshot"
 
 end_test
 
@@ -45,6 +40,7 @@ start_test "pinchtab pdf --tab <id>"
 pt_get /tabs
 TAB_ID=$(echo "$RESULT" | jq -r '.tabs[0].id')
 
-assert_status 200 "${PINCHTAB_URL}/tabs/${TAB_ID}/pdf"
+pt_get "/tabs/${TAB_ID}/pdf"
+assert_ok "tab pdf"
 
 end_test

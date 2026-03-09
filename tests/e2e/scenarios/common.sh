@@ -220,6 +220,37 @@ pt_get() { pinchtab GET "$1"; echo "$RESULT"; }
 pt_post() { pinchtab POST "$1" -d "$2"; echo "$RESULT"; }
 
 # ================================================================
+# HTTP status assertions
+# ================================================================
+
+# Assert last request returned expected status (uses $HTTP_STATUS from pinchtab())
+assert_ok() {
+  local label="${1:-request}"
+  
+  if [ "$HTTP_STATUS" = "200" ] || [ "$HTTP_STATUS" = "201" ]; then
+    echo -e "  ${GREEN}✓${NC} $label → $HTTP_STATUS"
+    ((ASSERTIONS_PASSED++)) || true
+  else
+    echo -e "  ${RED}✗${NC} $label failed (status: $HTTP_STATUS)"
+    ((ASSERTIONS_FAILED++)) || true
+  fi
+}
+
+# Assert last request returned specific status
+assert_http_status() {
+  local expected="$1"
+  local label="${2:-request}"
+  
+  if [ "$HTTP_STATUS" = "$expected" ]; then
+    echo -e "  ${GREEN}✓${NC} $label → $HTTP_STATUS"
+    ((ASSERTIONS_PASSED++)) || true
+  else
+    echo -e "  ${RED}✗${NC} $label: expected $expected, got $HTTP_STATUS"
+    ((ASSERTIONS_FAILED++)) || true
+  fi
+}
+
+# ================================================================
 # Element interaction helpers
 # ================================================================
 
