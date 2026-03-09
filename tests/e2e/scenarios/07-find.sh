@@ -37,7 +37,7 @@ start_test "pinchtab find (search)"
 
 pt_post /find -d '{"query":"search input","topK":5}'
 assert_ok "find search"
-assert_json_length_gte "$RESULT" ".candidates" 1 "has candidates"
+assert_json_length_gte "$RESULT" ".matches" 1 "has matches"
 
 end_test
 
