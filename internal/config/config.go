@@ -51,7 +51,7 @@ type RuntimeConfig struct {
 	UserAgent         string
 	NoAnimations      bool
 	StealthLevel      string
-	TabEvictionPolicy string // "reject" (default), "close_oldest", "close_lru"
+	TabEvictionPolicy string // "close_lru" (default), "reject", "close_oldest"
 
 	// Timeout settings
 	ActionTimeout   time.Duration
@@ -520,7 +520,7 @@ func Load() *RuntimeConfig {
 		UserAgent:         "",
 		NoAnimations:      false,
 		StealthLevel:      "light",
-		TabEvictionPolicy: "reject",
+		TabEvictionPolicy: "close_lru",
 
 		// Timeout defaults
 		ActionTimeout:   30 * time.Second,
@@ -800,7 +800,7 @@ func DefaultFileConfig() FileConfig {
 			Mode:              "headless",
 			MaxTabs:           &maxTabs,
 			StealthLevel:      "light",
-			TabEvictionPolicy: "reject",
+			TabEvictionPolicy: "close_lru",
 		},
 		Security: SecurityConfig{
 			AllowEvaluate:   &allowEvaluate,

@@ -253,9 +253,9 @@ Key functions introduced:
 
 **Tab eviction policies** — PR #145 introduced configurable eviction when the
 maximum tab count (`MaxTabs`) is reached:
-1. `reject` (default) — Return HTTP 429 when the limit is reached
+1. `reject` — Return HTTP 429 when the limit is reached
 2. `close_oldest` — Automatically close the oldest tab (by `CreatedAt`)
-3. `close_lru` — Automatically close the least recently used tab (by `LastUsed`)
+3. `close_lru` (default) — Automatically close the least recently used tab (by `LastUsed`)
 
 This is implemented through a `TabLimitError` type with HTTP 429 status and
 timestamp tracking on each `TabEntry`.

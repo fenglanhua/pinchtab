@@ -227,12 +227,12 @@ func (tm *TabManager) CreateTab(url string) (string, context.Context, context.Ca
 				if evictErr := tm.closeOldestTab(); evictErr != nil {
 					return "", nil, nil, fmt.Errorf("eviction failed: %w", evictErr)
 				}
-			case "close_lru":
+			case "reject":
+				return "", nil, nil, &TabLimitError{Current: len(targets), Max: tm.config.MaxTabs}
+			default: // "close_lru" (default)
 				if evictErr := tm.closeLRUTab(); evictErr != nil {
 					return "", nil, nil, fmt.Errorf("eviction failed: %w", evictErr)
 				}
-			default: // "reject"
-				return "", nil, nil, &TabLimitError{Current: len(targets), Max: tm.config.MaxTabs}
 			}
 		}
 	}

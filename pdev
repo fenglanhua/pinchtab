@@ -17,7 +17,8 @@ NC=$'\033[0m'
 # ── Commands ─────────────────────────────────────────────────────────
 # name:emoji:description
 COMMANDS=(
-  "build:🚀:Build & run"
+  "dev:🚀:Build & run"
+  "build:🔨:Build the application"
   "run:🏃:Run the application"
   "check:🧪:All checks"
   "test:🔬:All tests"
@@ -122,7 +123,8 @@ run_command() {
       echo ""
       exec docker compose -f tests/e2e/docker-compose.yml up --build --abort-on-container-exit
       ;;
-    "build")        exec bash scripts/dev.sh ;;
+    "dev")          exec bash scripts/dev.sh ;;
+    "build")        exec bash scripts/build.sh ;;
     "run")          exec bash scripts/run.sh ;;
     "doctor")       exec bash scripts/doctor.sh ;;
     "hooks")        exec bash scripts/install-hooks.sh ;;

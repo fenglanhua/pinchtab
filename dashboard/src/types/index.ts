@@ -167,7 +167,7 @@ export const defaultBackendConfig: BackendConfig = {
     userAgent: "",
     noAnimations: false,
     stealthLevel: "light",
-    tabEvictionPolicy: "reject",
+    tabEvictionPolicy: "close_lru",
   },
   security: {
     allowEvaluate: false,

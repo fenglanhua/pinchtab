@@ -35,7 +35,7 @@ type ServerConfig struct {
 	Headless          bool   // default: true
 	Stealth           string // default: "light"
 	MaxTabs           int    // default: 0 (uses config default: 20)
-	TabEvictionPolicy string // default: "" (uses config default: "reject")
+	TabEvictionPolicy string // default: "" (uses config default: "close_lru")
 
 	// Security - all default to true for tests (unlike production defaults)
 	AllowEvaluate   bool // default: true (tests need this)

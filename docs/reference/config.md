@@ -137,7 +137,7 @@ Current nested config shape:
     "maxTabs": 20,
     "maxParallelTabs": 0,
     "stealthLevel": "light",
-    "tabEvictionPolicy": "reject",
+    "tabEvictionPolicy": "close_lru",
     "blockAds": false,
     "blockImages": false,
     "blockMedia": false,
@@ -310,7 +310,7 @@ Valid enum values:
 | --- | --- |
 | `instanceDefaults.mode` | `headless`, `headed` |
 | `instanceDefaults.stealthLevel` | `light`, `medium`, `full` |
-| `instanceDefaults.tabEvictionPolicy` | `reject`, `close_oldest`, `close_lru` |
+| `instanceDefaults.tabEvictionPolicy` | `reject`, `close_oldest`, `close_lru` (default) |
 | `multiInstance.strategy` | `simple`, `explicit`, `simple-autorestart` |
 | `multiInstance.allocationPolicy` | `fcfs`, `round_robin`, `random` |
 | `security.attach.allowSchemes` | `ws`, `wss` |

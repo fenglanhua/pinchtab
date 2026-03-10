@@ -102,8 +102,8 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if cfg.AllocationPolicy != "fcfs" {
 		t.Errorf("default AllocationPolicy = %v, want fcfs", cfg.AllocationPolicy)
 	}
-	if cfg.TabEvictionPolicy != "reject" {
-		t.Errorf("default TabEvictionPolicy = %v, want reject", cfg.TabEvictionPolicy)
+	if cfg.TabEvictionPolicy != "close_lru" {
+		t.Errorf("default TabEvictionPolicy = %v, want close_lru", cfg.TabEvictionPolicy)
 	}
 	if cfg.AttachEnabled {
 		t.Errorf("default AttachEnabled = %v, want false", cfg.AttachEnabled)

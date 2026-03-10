@@ -19,6 +19,7 @@ Development and CI scripts for PinchTab.
 
 | Script | Purpose |
 |--------|---------|
+| `build.sh` | Full build (dashboard + Go) without starting the server |
 | `build-dashboard.sh` | Generate TS types (tygo) + build React dashboard + copy to Go embed |
 | `dev.sh` | Full build (dashboard + Go) and run |
 | `run.sh` | Run the existing `./pinchtab` binary |
