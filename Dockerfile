@@ -23,6 +23,13 @@ RUN go build -ldflags="-s -w" -o pinchtab ./cmd/pinchtab
 
 # Stage 3: Minimal runtime image with Chromium.
 # Only the compiled binary and entrypoint script are copied in.
+# 
+# Security model:
+# - Chrome runs with --no-sandbox (set by entrypoint) because containers don't
+#   have user namespaces for sandboxing
+# - Container provides isolation via cgroups, seccomp, dropped capabilities,
+#   read-only filesystem, and non-root user
+# - This matches best practices for headless Chrome in containerized environments
 FROM alpine:3.21
 
 LABEL org.opencontainers.image.source="https://github.com/pinchtab/pinchtab"

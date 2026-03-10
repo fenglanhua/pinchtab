@@ -97,15 +97,56 @@ Without a mounted volume, profiles and saved session state are ephemeral.
 
 For current runtime overrides, rely on:
 
-- `PINCHTAB_CONFIG`
-- `PINCHTAB_BIND`
-- `PINCHTAB_PORT`
-- `PINCHTAB_TOKEN`
-- `CHROME_BIN`
+- `PINCHTAB_CONFIG` — path to custom config file (if not using managed config)
+- `PINCHTAB_BIND` — bind address (default: 127.0.0.1, overridden to 0.0.0.0 in managed-config containers)
+- `PINCHTAB_PORT` — server port (default: 9867)
+- `PINCHTAB_TOKEN` — auth token (prefer Docker secrets; see below)
+- `CHROME_BIN` — path to Chrome binary (auto-detected)
 
 Everything else should go in `config.json`.
 
 In the bundled image, you usually do not need to set `PINCHTAB_BIND`, `PINCHTAB_PORT`, or `CHROME_BIN` manually unless you are overriding the generated config or replacing the browser binary. The managed-config entrypoint supplies `PINCHTAB_BIND=0.0.0.0` at runtime so Docker port publishing works without broadening the persisted config.
+
+### About `PINCHTAB_BIND=0.0.0.0` in Containers
+
+The entrypoint automatically sets `PINCHTAB_BIND=0.0.0.0` at runtime when using managed config. This is necessary because:
+
+1. **Docker port publishing** requires the process to listen on `0.0.0.0` inside the container
+2. **Persisted config** stays secure with `bind: "127.0.0.1"` so it doesn't accidentally expose the service if the container is restarted outside Docker
+3. **Separation of concerns** — runtime behavior (where to bind) is separate from persisted configuration
+
+Example: `docker run -p 127.0.0.1:9867:9867` keeps PinchTab reachable only from your host machine, even though the process internally listens on `0.0.0.0`.
+
+### Docker Secrets (Sensitive Configuration)
+
+For production deployments, use Docker secrets instead of env vars for `PINCHTAB_TOKEN`:
+
+```bash
+# Create a secret
+echo "your-secret-token" | docker secret create pinchtab_token -
+
+# Use it in docker-compose.yml
+services:
+  pinchtab:
+    image: pinchtab/pinchtab
+    secrets:
+      - pinchtab_token
+    environment:
+      PINCHTAB_TOKEN_FILE: /run/secrets/pinchtab_token
+    # ... rest of config
+```
+
+Or with `docker run`:
+
+```bash
+docker run -d \
+  --name pinchtab \
+  --secret pinchtab_token \
+  -e PINCHTAB_TOKEN_FILE=/run/secrets/pinchtab_token \
+  pinchtab/pinchtab
+```
+
+Secrets are mounted read-only and never appear in `docker ps` or logs.
 
 ## Compose
 
@@ -118,6 +159,22 @@ The repository includes a `docker-compose.yml` that follows the managed-config p
 If you prefer a fully user-managed config file, mount it separately and set `PINCHTAB_CONFIG`.
 
 If you expose PinchTab beyond localhost, set an auth token and put it behind TLS or a trusted reverse proxy.
+
+## Security
+
+### Chrome Sandbox Disabled in Containers
+
+PinchTab runs Chrome with `--no-sandbox` in containers. This is standard practice because:
+
+- **User namespaces unavailable**: Containers don't have the full namespace isolation Chrome's sandbox requires
+- **Container security compensates**: The Docker image uses:
+  - `cap_drop: ALL` (no capabilities)
+  - `read_only: true` (immutable filesystem)
+  - `seccomp` default profile (syscall filtering)
+  - Non-root user
+- **Isolation at container layer**: The container runtime (cgroups, seccomp, AppArmor/SELinux) provides the security boundary
+
+This configuration is used by major headless browser services (Puppeteer, Playwright, Browserless).
 
 ## Resource Notes
 
