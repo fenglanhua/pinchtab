@@ -50,6 +50,31 @@ get_time_ms() {
   fi
 }
 
+wait_for_instance_ready() {
+  local base_url="$1"
+  local timeout_sec="${2:-60}"
+  local started_at
+  started_at=$(date +%s)
+
+  while true; do
+    local now
+    now=$(date +%s)
+    if [ $((now - started_at)) -ge "$timeout_sec" ]; then
+      echo -e "  ${RED}✗${NC} instance at ${base_url} did not reach running within ${timeout_sec}s"
+      return 1
+    fi
+
+    local inst_status
+    inst_status=$(curl -sf "${base_url}/health" 2>/dev/null | jq -r '.defaultInstance.status // empty' 2>/dev/null || true)
+    if [ "$inst_status" = "running" ]; then
+      echo -e "  ${GREEN}✓${NC} instance ready at ${base_url}"
+      return 0
+    fi
+
+    sleep 1
+  done
+}
+
 # Start a test
 start_test() {
   CURRENT_TEST="$1"

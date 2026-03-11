@@ -14,6 +14,10 @@ echo "FIXTURES_URL: ${FIXTURES_URL}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
+wait_for_instance_ready "${PINCHTAB_URL}"
+wait_for_instance_ready "${PINCHTAB_SECURE_URL}"
+echo ""
+
 # Find and run all test scripts in order
 for script in "${SCRIPT_DIR}"/[0-9][0-9]-*.sh; do
   if [ -f "$script" ]; then
