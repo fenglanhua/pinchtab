@@ -20,3 +20,19 @@ func TestBuildChromeArgsSuppressesCrashDialogs(t *testing.T) {
 		}
 	}
 }
+
+func TestDefaultChromeFlagArgsDisablesMetricsReporting(t *testing.T) {
+	args := defaultChromeFlagArgs()
+	for _, want := range []string{"--disable-metrics-reporting", "--metrics-recording-only"} {
+		found := false
+		for _, arg := range args {
+			if arg == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("expected %s in args, got %v", want, args)
+		}
+	}
+}

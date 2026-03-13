@@ -138,17 +138,15 @@ func setupAllocator(cfg *config.RuntimeConfig) (context.Context, context.CancelF
 	w, h := randomWindowSize()
 	opts = append(opts, chromedp.WindowSize(w, h))
 
-	// Common stealth flags
-	opts = append(opts,
-		chromedp.Flag("disable-automation", ""),
-		chromedp.Flag("disable-blink-features", "AutomationControlled"),
-		chromedp.Flag("disable-session-crashed-bubble", ""),
-		chromedp.Flag("disable-dev-shm-usage", ""),
-		chromedp.Flag("hide-crash-restore-bubble", ""),
-		chromedp.Flag("no-first-run", ""),
-		chromedp.Flag("no-default-browser-check", ""),
-		chromedp.Flag("noerrdialogs", ""),
-	)
+	// Common launch flags
+	for _, flag := range defaultChromeFlagArgs() {
+		name := strings.TrimPrefix(flag, "--")
+		value := ""
+		if parts := strings.SplitN(name, "=", 2); len(parts) == 2 {
+			name, value = parts[0], parts[1]
+		}
+		opts = append(opts, chromedp.Flag(name, value))
+	}
 
 	// Extension loading
 	if len(cfg.ExtensionPaths) > 0 {
@@ -459,13 +457,8 @@ func waitForChromeDevTools(port int, timeout time.Duration) (string, error) {
 	return "", fmt.Errorf("chrome devtools not ready on port %d after %v", port, timeout)
 }
 
-// buildChromeArgs constructs the Chrome command-line arguments for direct launch.
-// This mirrors the flags applied by setupAllocator/DefaultExecAllocatorOptions
-// and is used exclusively by the direct-launch fallback path.
-func buildChromeArgs(cfg *config.RuntimeConfig, port int) []string {
-	args := []string{
-		fmt.Sprintf("--remote-debugging-port=%d", port),
-		// Core stability / automation flags (mirrors chromedp.DefaultExecAllocatorOptions)
+func defaultChromeFlagArgs() []string {
+	return []string{
 		"--disable-background-networking",
 		"--disable-background-timer-throttling",
 		"--disable-backgrounding-occluded-windows",
@@ -477,6 +470,7 @@ func buildChromeArgs(cfg *config.RuntimeConfig, port int) []string {
 		"--hide-crash-restore-bubble",
 		"--disable-hang-monitor",
 		"--disable-ipc-flooding-protection",
+		"--disable-metrics-reporting",
 		"--disable-popup-blocking",
 		"--disable-prompt-on-repost",
 		"--disable-renderer-backgrounding",
@@ -493,6 +487,13 @@ func buildChromeArgs(cfg *config.RuntimeConfig, port int) []string {
 		"--disable-automation",
 		"--disable-blink-features=AutomationControlled",
 	}
+}
+
+// buildChromeArgs constructs the Chrome command-line arguments for direct launch.
+// This mirrors the flags applied by setupAllocator/DefaultExecAllocatorOptions
+// and is used exclusively by the direct-launch fallback path.
+func buildChromeArgs(cfg *config.RuntimeConfig, port int) []string {
+	args := append([]string{fmt.Sprintf("--remote-debugging-port=%d", port)}, defaultChromeFlagArgs()...)
 
 	if len(cfg.ExtensionPaths) > 0 {
 		joined := strings.Join(cfg.ExtensionPaths, ",")
