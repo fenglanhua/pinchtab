@@ -1,80 +1,112 @@
 package main
 
 import (
-	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
-	"reflect"
+	"slices"
 	"strings"
 
+	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/spf13/cobra"
 )
 
+var securityCmd = &cobra.Command{
+	Use:   "security",
+	Short: "Review runtime security posture",
+	Long:  "Shows runtime security posture and offers to restore recommended security defaults.",
+	Run: func(cmd *cobra.Command, args []string) {
+		cfg := loadConfig()
+		handleSecurityCommand(cfg)
+	},
+}
+
+func init() {
+	securityCmd.GroupID = "config"
+	securityCmd.AddCommand(&cobra.Command{
+		Use:   "up",
+		Short: "Apply recommended security defaults",
+		Run: func(cmd *cobra.Command, args []string) {
+			handleSecurityUpCommand()
+		},
+	})
+	securityCmd.AddCommand(&cobra.Command{
+		Use:   "down",
+		Short: "Lower guards while keeping loopback bind and API auth enabled",
+		Run: func(cmd *cobra.Command, args []string) {
+			handleSecurityDownCommand()
+		},
+	})
+	rootCmd.AddCommand(securityCmd)
+}
+
 func handleSecurityCommand(cfg *config.RuntimeConfig) {
-	warnings := assessSecurityWarnings(cfg)
-	recommended := recommendedSecurityDefaultLines(cfg)
+	interactive := isInteractiveTerminal()
 
-	fmt.Println("Security posture:")
-	fmt.Println()
-	printSecuritySummary(os.Stdout, cfg, "  ")
+	for {
+		posture := cli.AssessSecurityPosture(cfg)
+		warnings := cli.AssessSecurityWarnings(cfg)
+		recommended := cli.RecommendedSecurityDefaultLines(cfg)
 
-	if len(warnings) == 0 {
-		fmt.Println("Warnings:")
-		fmt.Println()
-		fmt.Println("  none")
-	} else {
-		fmt.Println("Warnings:")
-		fmt.Println()
-		for _, warning := range warnings {
-			fmt.Printf("  - %s\n", warning.Message)
-			for i := 0; i+1 < len(warning.Attrs); i += 2 {
-				key, ok := warning.Attrs[i].(string)
-				if !ok || key == "hint" {
-					continue
+		printSecuritySummary(posture, interactive)
+
+		if len(warnings) > 0 {
+			fmt.Println()
+			fmt.Println(cli.StyleStdout(cli.HeadingStyle, "Warnings"))
+			fmt.Println()
+			for _, warning := range warnings {
+				fmt.Printf("  - %s\n", cli.StyleStdout(cli.WarningStyle, warning.Message))
+				for i := 0; i+1 < len(warning.Attrs); i += 2 {
+					key, ok := warning.Attrs[i].(string)
+					if !ok || key == "hint" {
+						continue
+					}
+					fmt.Printf("      %s: %s\n", cli.StyleStdout(cli.MutedStyle, key), cli.StyleStdout(cli.ValueStyle, formatSecurityValue(warning.Attrs[i+1])))
 				}
-				fmt.Printf("      %s: %s\n", key, formatSecurityValue(warning.Attrs[i+1]))
-			}
-			for i := 0; i+1 < len(warning.Attrs); i += 2 {
-				key, ok := warning.Attrs[i].(string)
-				if ok && key == "hint" {
-					fmt.Printf("      hint: %s\n", formatSecurityValue(warning.Attrs[i+1]))
+				for i := 0; i+1 < len(warning.Attrs); i += 2 {
+					key, ok := warning.Attrs[i].(string)
+					if ok && key == "hint" {
+						fmt.Printf("      %s: %s\n", cli.StyleStdout(cli.MutedStyle, "hint"), cli.StyleStdout(cli.ValueStyle, formatSecurityValue(warning.Attrs[i+1])))
+					}
 				}
 			}
 		}
-	}
 
-	fmt.Println()
-	fmt.Println("Recommended security defaults:")
-	fmt.Println()
-	if len(recommended) == 0 {
-		fmt.Println("  none")
-	} else {
-		printRecommendedSecurityDefaults(recommended)
-	}
-	fmt.Println()
+		if len(recommended) == 0 && len(warnings) == 0 {
+			fmt.Println()
+			fmt.Println("  " + cli.StyleStdout(cli.SuccessStyle, "All recommended security defaults are active."))
+		} else if len(recommended) > 0 {
+			fmt.Println()
+			fmt.Println(cli.StyleStdout(cli.HeadingStyle, "Recommended defaults"))
+			fmt.Println()
+			printRecommendedSecurityDefaults(recommended)
+		}
 
-	if !isInteractiveTerminal() {
-		fmt.Println("Interactive restore skipped because stdin/stdout is not a terminal.")
-		return
-	}
+		if !interactive {
+			if len(recommended) > 0 {
+				fmt.Println()
+				fmt.Println(cli.StyleStdout(cli.MutedStyle, "Interactive editing skipped because stdin/stdout is not a terminal."))
+			}
+			return
+		}
 
-	if !promptRestoreDefaults() {
-		fmt.Println("No changes made.")
-		return
+		nextCfg, changed, done, err := promptSecurityEdit(cfg, posture, len(recommended) > 0)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, cli.StyleStderr(cli.ErrorStyle, err.Error()))
+			os.Exit(1)
+		}
+		if done {
+			return
+		}
+		if !changed {
+			fmt.Println()
+			fmt.Println(cli.StyleStdout(cli.MutedStyle, "No changes made."))
+			return
+		}
+		cfg = nextCfg
+		fmt.Println()
 	}
-
-	configPath, changed, err := restoreSecurityDefaults()
-	if err != nil {
-		fmt.Printf("Error restoring defaults: %v\n", err)
-		os.Exit(1)
-	}
-	if !changed {
-		fmt.Printf("Security defaults already match %s\n", configPath)
-		return
-	}
-
-	fmt.Printf("Security defaults restored in %s\n", configPath)
-	fmt.Println("Restart PinchTab to apply file-based changes.")
 }
 
 func formatSecurityValue(value any) string {
@@ -86,148 +118,357 @@ func formatSecurityValue(value any) string {
 	}
 }
 
-func securityUsage() {
-	fmt.Println("Usage: pinchtab security")
-	fmt.Println()
-	fmt.Println("Shows runtime security posture and offers to restore recommended security defaults.")
-}
-
 func printRecommendedSecurityDefaults(lines []string) {
 	for _, line := range lines {
-		fmt.Printf("  - %s\n", line)
+		fmt.Printf("  - %s\n", cli.StyleStdout(cli.ValueStyle, line))
 	}
 }
 
-func recommendedSecurityDefaultLines(cfg *config.RuntimeConfig) []string {
-	posture := assessSecurityPosture(cfg)
-	ordered := []string{
-		"server.bind = 127.0.0.1",
-		"security.allowEvaluate = false",
-		"security.allowMacro = false",
-		"security.allowScreencast = false",
-		"security.allowDownload = false",
-		"security.allowUpload = false",
-		"security.attach.enabled = false",
-		"security.attach.allowHosts = 127.0.0.1,localhost,::1",
-		"security.attach.allowSchemes = ws,wss",
-		"security.idpi.enabled = true",
-		"security.idpi.allowedDomains = 127.0.0.1,localhost,::1",
-		"security.idpi.strictMode = true",
-		"security.idpi.scanContent = true",
-		"security.idpi.wrapContent = true",
-	}
-	needed := make(map[string]bool, len(ordered))
-
-	for _, check := range posture.Checks {
+func printSecuritySummary(posture cli.SecurityPosture, interactive bool) {
+	fmt.Println(cli.StyleStdout(cli.HeadingStyle, "Security"))
+	fmt.Println()
+	fmt.Printf("  %s  %s\n", posture.Bar, cli.StyleStdout(cli.ValueStyle, posture.Level))
+	for i, check := range posture.Checks {
+		indicator := cli.StyleStdout(cli.WarningStyle, "!!")
 		if check.Passed {
+			indicator = cli.StyleStdout(cli.SuccessStyle, "ok")
+		}
+		if interactive {
+			fmt.Printf("  %d. %s %-20s %s\n", i+1, indicator, check.Label, check.Detail)
 			continue
 		}
-		switch check.ID {
-		case "bind_loopback":
-			needed["server.bind = 127.0.0.1"] = true
-		case "sensitive_endpoints_disabled":
-			needed["security.allowEvaluate = false"] = true
-			needed["security.allowMacro = false"] = true
-			needed["security.allowScreencast = false"] = true
-			needed["security.allowDownload = false"] = true
-			needed["security.allowUpload = false"] = true
-		case "attach_disabled":
-			needed["security.attach.enabled = false"] = true
-			needed["security.attach.allowHosts = 127.0.0.1,localhost,::1"] = true
-			needed["security.attach.allowSchemes = ws,wss"] = true
-		case "attach_local_only":
-			needed["security.attach.allowHosts = 127.0.0.1,localhost,::1"] = true
-			needed["security.attach.allowSchemes = ws,wss"] = true
-		case "idpi_whitelist_scoped", "idpi_strict_mode", "idpi_content_protection":
-			needed["security.idpi.enabled = true"] = true
-			needed["security.idpi.allowedDomains = 127.0.0.1,localhost,::1"] = true
-			needed["security.idpi.strictMode = true"] = true
-			needed["security.idpi.scanContent = true"] = true
-			needed["security.idpi.wrapContent = true"] = true
+		fmt.Printf("    %s %-20s %s\n", indicator, check.Label, check.Detail)
+	}
+}
+
+func promptSecurityEdit(cfg *config.RuntimeConfig, posture cli.SecurityPosture, canRestoreDefaults bool) (*config.RuntimeConfig, bool, bool, error) {
+	fmt.Println()
+	prompt := "Edit item (1-8"
+	if canRestoreDefaults {
+		prompt += ", u = security up"
+	}
+	prompt += ", d = security down, blank to exit):"
+
+	choice, err := promptInput(cli.StyleStdout(cli.HeadingStyle, prompt), "")
+	if err != nil {
+		return nil, false, false, err
+	}
+	choice = strings.ToLower(strings.TrimSpace(choice))
+	if choice == "" {
+		return nil, false, true, nil
+	}
+
+	if (choice == "u" || choice == "up") && canRestoreDefaults {
+		nextCfg, changed, err := applySecurityUp()
+		return nextCfg, changed, false, err
+	}
+
+	if choice == "d" || choice == "down" {
+		nextCfg, changed, err := applySecurityDown()
+		return nextCfg, changed, false, err
+	}
+
+	index := strings.TrimSpace(choice)
+	for i, check := range posture.Checks {
+		if index == fmt.Sprint(i+1) {
+			nextCfg, changed, err := editSecurityCheck(cfg, check)
+			return nextCfg, changed, false, err
 		}
 	}
 
-	lines := make([]string, 0, len(needed))
-	for _, line := range ordered {
-		if needed[line] {
-			lines = append(lines, line)
+	return nil, false, false, fmt.Errorf("invalid selection %q", choice)
+}
+
+func editSecurityCheck(cfg *config.RuntimeConfig, check cli.SecurityPostureCheck) (*config.RuntimeConfig, bool, error) {
+	switch check.ID {
+	case "bind_loopback":
+		value, err := promptInput("Set server.bind:", cfg.Bind)
+		if err != nil {
+			return nil, false, err
 		}
+		return updateConfigValue("server.bind", value)
+	case "api_auth_enabled":
+		picked, err := promptSelect("API authentication", []menuOption{
+			{label: "Generate new token (Recommended)", value: "generate"},
+			{label: "Set custom token", value: "custom"},
+			{label: "Disable token", value: "disable"},
+			{label: "Cancel", value: "cancel"},
+		})
+		if err != nil || picked == "" || picked == "cancel" {
+			return cfg, false, nil
+		}
+		switch picked {
+		case "generate":
+			token, err := config.GenerateAuthToken()
+			if err != nil {
+				return nil, false, err
+			}
+			return updateConfigValue("server.token", token)
+		case "custom":
+			token, err := promptInput("Set server.token:", cfg.Token)
+			if err != nil {
+				return nil, false, err
+			}
+			return updateConfigValue("server.token", token)
+		case "disable":
+			return updateConfigValue("server.token", "")
+		}
+	case "sensitive_endpoints_disabled":
+		current := strings.Join(cfg.EnabledSensitiveEndpoints(), ",")
+		value, err := promptInput("Enable sensitive endpoints (evaluate,macro,screencast,download,upload; blank = disable all):", current)
+		if err != nil {
+			return nil, false, err
+		}
+		return updateSensitiveEndpoints(value)
+	case "attach_disabled":
+		picked, err := promptSelect("Attach endpoint", []menuOption{
+			{label: "Disable (Recommended)", value: "disable"},
+			{label: "Enable", value: "enable"},
+			{label: "Cancel", value: "cancel"},
+		})
+		if err != nil || picked == "" || picked == "cancel" {
+			return cfg, false, nil
+		}
+		return updateConfigValue("security.attach.enabled", fmt.Sprintf("%t", picked == "enable"))
+	case "attach_local_only":
+		value, err := promptInput("Set security.attach.allowHosts (comma-separated):", strings.Join(cfg.AttachAllowHosts, ","))
+		if err != nil {
+			return nil, false, err
+		}
+		return updateConfigValue("security.attach.allowHosts", value)
+	case "idpi_whitelist_scoped":
+		value, err := promptInput("Set security.idpi.allowedDomains (comma-separated):", strings.Join(cfg.IDPI.AllowedDomains, ","))
+		if err != nil {
+			return nil, false, err
+		}
+		return updateConfigValue("security.idpi.allowedDomains", value)
+	case "idpi_strict_mode":
+		picked, err := promptSelect("IDPI strict mode", []menuOption{
+			{label: "Enforce (Recommended)", value: "true"},
+			{label: "Warn only", value: "false"},
+			{label: "Cancel", value: "cancel"},
+		})
+		if err != nil || picked == "" || picked == "cancel" {
+			return cfg, false, nil
+		}
+		return updateConfigValue("security.idpi.strictMode", picked)
+	case "idpi_content_protection":
+		picked, err := promptSelect("IDPI content guard", []menuOption{
+			{label: "Active: scan + wrap (Recommended)", value: "both"},
+			{label: "Scan only", value: "scan"},
+			{label: "Wrap only", value: "wrap"},
+			{label: "Disable", value: "off"},
+			{label: "Cancel", value: "cancel"},
+		})
+		if err != nil || picked == "" || picked == "cancel" {
+			return cfg, false, nil
+		}
+		return updateContentGuard(picked)
 	}
-	return lines
+	return cfg, false, nil
 }
 
-func promptRestoreDefaults() bool {
-	fmt.Print("Restore recommended security defaults in config? (y/N): ")
-	reader := bufio.NewReader(os.Stdin)
-	response, err := reader.ReadString('\n')
-	if err != nil && strings.TrimSpace(response) == "" {
-		return false
-	}
-	switch strings.ToLower(strings.TrimSpace(response)) {
-	case "y", "yes":
-		return true
-	default:
-		return false
-	}
-}
-
-func isInteractiveTerminal() bool {
-	in, err := os.Stdin.Stat()
-	if err != nil || (in.Mode()&os.ModeCharDevice) == 0 {
-		return false
-	}
-	out, err := os.Stdout.Stat()
-	if err != nil || (out.Mode()&os.ModeCharDevice) == 0 {
-		return false
-	}
-	return true
-}
-
-func restoreSecurityDefaults() (string, bool, error) {
+func updateConfigValue(path, value string) (*config.RuntimeConfig, bool, error) {
 	fc, configPath, err := config.LoadFileConfig()
 	if err != nil {
-		return "", false, err
+		return nil, false, fmt.Errorf("load config: %w", err)
 	}
-	before := securityDefaultsSnapshot(fc)
-	applyRecommendedSecurityDefaults(fc)
-	after := securityDefaultsSnapshot(fc)
-	if reflect.DeepEqual(before, after) {
-		return configPath, false, nil
+	if err := config.SetConfigValue(fc, path, value); err != nil {
+		return nil, false, fmt.Errorf("set %s: %w", path, err)
+	}
+	if errs := config.ValidateFileConfig(fc); len(errs) > 0 {
+		return nil, false, errs[0]
 	}
 	if err := config.SaveFileConfig(fc, configPath); err != nil {
-		return "", false, err
+		return nil, false, fmt.Errorf("save config: %w", err)
 	}
-	return configPath, true, nil
+	return config.Load(), true, nil
 }
 
-func applyRecommendedSecurityDefaults(fc *config.FileConfig) {
-	defaults := config.DefaultFileConfig()
-	if fc == nil {
-		return
+func updateSensitiveEndpoints(value string) (*config.RuntimeConfig, bool, error) {
+	fc, configPath, err := config.LoadFileConfig()
+	if err != nil {
+		return nil, false, fmt.Errorf("load config: %w", err)
 	}
-	fc.Server.Bind = defaults.Server.Bind
-	if strings.TrimSpace(fc.Server.Token) == "" {
-		token, err := config.GenerateAuthToken()
-		if err == nil {
-			fc.Server.Token = token
+
+	selected := map[string]bool{}
+	for _, item := range splitCommaList(value) {
+		selected[item] = true
+	}
+	for endpoint, path := range map[string]string{
+		"evaluate":   "security.allowEvaluate",
+		"macro":      "security.allowMacro",
+		"screencast": "security.allowScreencast",
+		"download":   "security.allowDownload",
+		"upload":     "security.allowUpload",
+	} {
+		enabled := selected[endpoint]
+		if err := config.SetConfigValue(fc, path, fmt.Sprintf("%t", enabled)); err != nil {
+			return nil, false, fmt.Errorf("set %s: %w", endpoint, err)
 		}
 	}
-	fc.Security = defaults.Security
+	if errs := config.ValidateFileConfig(fc); len(errs) > 0 {
+		return nil, false, errs[0]
+	}
+	if err := config.SaveFileConfig(fc, configPath); err != nil {
+		return nil, false, fmt.Errorf("save config: %w", err)
+	}
+	return config.Load(), true, nil
 }
 
-type securityDefaultsState struct {
-	Bind     string
-	Token    string
-	Security config.SecurityConfig
+func updateContentGuard(mode string) (*config.RuntimeConfig, bool, error) {
+	fc, configPath, err := config.LoadFileConfig()
+	if err != nil {
+		return nil, false, fmt.Errorf("load config: %w", err)
+	}
+
+	scan := mode == "both" || mode == "scan"
+	wrap := mode == "both" || mode == "wrap"
+	for _, item := range []struct {
+		path  string
+		value bool
+	}{
+		{path: "security.idpi.scanContent", value: scan},
+		{path: "security.idpi.wrapContent", value: wrap},
+	} {
+		if err := config.SetConfigValue(fc, item.path, fmt.Sprintf("%t", item.value)); err != nil {
+			return nil, false, fmt.Errorf("set %s: %w", item.path, err)
+		}
+	}
+	if errs := config.ValidateFileConfig(fc); len(errs) > 0 {
+		return nil, false, errs[0]
+	}
+	if err := config.SaveFileConfig(fc, configPath); err != nil {
+		return nil, false, fmt.Errorf("save config: %w", err)
+	}
+	return config.Load(), true, nil
 }
 
-func securityDefaultsSnapshot(fc *config.FileConfig) securityDefaultsState {
-	if fc == nil {
-		return securityDefaultsState{}
+func applyGuardsDownPreset() (*config.RuntimeConfig, string, bool, error) {
+	fc, configPath, err := config.LoadFileConfig()
+	if err != nil {
+		return nil, "", false, fmt.Errorf("load config: %w", err)
 	}
-	return securityDefaultsState{
-		Bind:     fc.Server.Bind,
-		Token:    fc.Server.Token,
-		Security: fc.Security,
+	originalJSON, err := formatFileConfigJSON(fc)
+	if err != nil {
+		return nil, "", false, err
 	}
+
+	original, err := config.GetConfigValue(fc, "server.token")
+	if err != nil {
+		return nil, "", false, fmt.Errorf("read server.token: %w", err)
+	}
+	if strings.TrimSpace(original) == "" {
+		token, err := config.GenerateAuthToken()
+		if err != nil {
+			return nil, "", false, fmt.Errorf("generate token: %w", err)
+		}
+		if err := config.SetConfigValue(fc, "server.token", token); err != nil {
+			return nil, "", false, fmt.Errorf("set server.token: %w", err)
+		}
+	}
+
+	for _, item := range []struct {
+		path  string
+		value string
+	}{
+		{path: "server.bind", value: "127.0.0.1"},
+		{path: "security.allowEvaluate", value: "true"},
+		{path: "security.allowMacro", value: "true"},
+		{path: "security.allowScreencast", value: "true"},
+		{path: "security.allowDownload", value: "true"},
+		{path: "security.allowUpload", value: "true"},
+		{path: "security.attach.enabled", value: "true"},
+		{path: "security.attach.allowHosts", value: "127.0.0.1,localhost,::1"},
+		{path: "security.attach.allowSchemes", value: "ws,wss"},
+		{path: "security.idpi.enabled", value: "false"},
+		{path: "security.idpi.strictMode", value: "false"},
+		{path: "security.idpi.scanContent", value: "false"},
+		{path: "security.idpi.wrapContent", value: "false"},
+	} {
+		if err := config.SetConfigValue(fc, item.path, item.value); err != nil {
+			return nil, "", false, fmt.Errorf("set %s: %w", item.path, err)
+		}
+	}
+
+	if errs := config.ValidateFileConfig(fc); len(errs) > 0 {
+		return nil, "", false, errs[0]
+	}
+
+	nextJSON, err := formatFileConfigJSON(fc)
+	if err != nil {
+		return nil, "", false, err
+	}
+	changed := originalJSON != nextJSON
+	if !changed {
+		return config.Load(), configPath, false, nil
+	}
+
+	if err := config.SaveFileConfig(fc, configPath); err != nil {
+		return nil, "", false, fmt.Errorf("save config: %w", err)
+	}
+	return config.Load(), configPath, true, nil
+}
+
+func applySecurityUp() (*config.RuntimeConfig, bool, error) {
+	configPath, changed, err := cli.RestoreSecurityDefaults()
+	if err != nil {
+		return nil, false, fmt.Errorf("restore defaults: %w", err)
+	}
+	if !changed {
+		fmt.Println(cli.StyleStdout(cli.MutedStyle, fmt.Sprintf("Security defaults already match %s", configPath)))
+		return config.Load(), false, nil
+	}
+	fmt.Println(cli.StyleStdout(cli.SuccessStyle, fmt.Sprintf("Security defaults restored in %s", configPath)))
+	fmt.Println(cli.StyleStdout(cli.MutedStyle, "Restart PinchTab to apply file-based changes."))
+	return config.Load(), true, nil
+}
+
+func applySecurityDown() (*config.RuntimeConfig, bool, error) {
+	nextCfg, configPath, changed, err := applyGuardsDownPreset()
+	if err != nil {
+		return nil, false, fmt.Errorf("guards down: %w", err)
+	}
+	if !changed {
+		fmt.Println(cli.StyleStdout(cli.MutedStyle, fmt.Sprintf("Guards down preset already matches %s", configPath)))
+		return nextCfg, false, nil
+	}
+	fmt.Println(cli.StyleStdout(cli.WarningStyle, fmt.Sprintf("Guards down preset applied in %s", configPath)))
+	fmt.Println(cli.StyleStdout(cli.MutedStyle, "Loopback bind and API auth remain enabled; sensitive endpoints and attach are enabled, IDPI is disabled."))
+	return nextCfg, true, nil
+}
+
+func handleSecurityUpCommand() {
+	if _, _, err := applySecurityUp(); err != nil {
+		fmt.Fprintln(os.Stderr, cli.StyleStderr(cli.ErrorStyle, err.Error()))
+		os.Exit(1)
+	}
+}
+
+func handleSecurityDownCommand() {
+	if _, _, err := applySecurityDown(); err != nil {
+		fmt.Fprintln(os.Stderr, cli.StyleStderr(cli.ErrorStyle, err.Error()))
+		os.Exit(1)
+	}
+}
+
+func formatFileConfigJSON(fc *config.FileConfig) (string, error) {
+	data, err := json.Marshal(fc)
+	if err != nil {
+		return "", fmt.Errorf("marshal config: %w", err)
+	}
+	return string(data), nil
+}
+
+func splitCommaList(value string) []string {
+	parts := strings.Split(value, ",")
+	items := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(strings.ToLower(part))
+		if trimmed != "" {
+			items = append(items, trimmed)
+		}
+	}
+	slices.Sort(items)
+	return slices.Compact(items)
 }

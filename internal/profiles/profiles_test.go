@@ -364,6 +364,43 @@ func TestProfileUpdateMeta(t *testing.T) {
 	}
 }
 
+func TestProfileUpdateByIDCanClearMetadata(t *testing.T) {
+	pm := NewProfileManager(t.TempDir())
+	mux := http.NewServeMux()
+	pm.RegisterHandlers(mux)
+
+	if err := pm.CreateWithMeta("clearable", ProfileMeta{
+		UseWhen:     "Used for work",
+		Description: "Has metadata",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	body := `{"useWhen":"","description":""}`
+	req := httptest.NewRequest("PATCH", "/profiles/"+profileID("clearable"), strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	profiles, err := pm.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(profiles) != 1 {
+		t.Fatalf("expected 1 profile, got %d", len(profiles))
+	}
+	if profiles[0].UseWhen != "" {
+		t.Errorf("expected empty useWhen after clear, got %q", profiles[0].UseWhen)
+	}
+	if profiles[0].Description != "" {
+		t.Errorf("expected empty description after clear, got %q", profiles[0].Description)
+	}
+}
+
 func TestProfileCreateWithUseWhen(t *testing.T) {
 	pm := NewProfileManager(t.TempDir())
 	mux := http.NewServeMux()

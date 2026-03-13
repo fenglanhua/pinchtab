@@ -31,7 +31,7 @@ git clone https://github.com/pinchtab/pinchtab.git
 cd pinchtab
 
 # 2. Run doctor (verifies environment, prompts before installing anything)
-./pdev doctor
+./dev doctor
 
 # 3. Build and run
 go build ./cmd/pinchtab
@@ -137,7 +137,7 @@ After cloning, run doctor to verify and set up your environment:
 ```bash
 git clone https://github.com/pinchtab/pinchtab.git
 cd pinchtab
-./pdev doctor
+./dev doctor
 ```
 
 Doctor checks your environment and **asks before installing** anything:
@@ -146,7 +146,7 @@ Doctor checks your environment and **asks before installing** anything:
 - Go dependencies (`go mod download`)
 - Node.js, Bun, and dashboard deps (optional, for dashboard development)
 
-Run `./pdev doctor` anytime to verify or fix your environment.
+Run `./dev doctor` anytime to verify or fix your environment.
 
 ---
 
@@ -165,7 +165,7 @@ go build -o pinchtab ./cmd/pinchtab
 
 > **Note:** This builds the Go server only. The dashboard will show a
 > "not built" placeholder. To include the full React dashboard, use
-> `./pdev build` instead — it builds the dashboard, compiles Go, and
+> `./dev build` instead — it builds the dashboard, compiles Go, and
 > runs the server in one step. Or run `./scripts/build-dashboard.sh`
 > before `go build`.
 
@@ -231,24 +231,25 @@ curl http://localhost:9867/health
 ### Run Tests
 
 ```bash
-go test ./...                              # All tests
+go test ./...                              # Unit tests only
 go test ./... -v                           # Verbose
 go test ./... -v -coverprofile=coverage.out
 go tool cover -html=coverage.out           # View coverage
+./dev e2e                                 # Run E2E tests (curl + CLI)
 ```
 
-### Developer Toolkit (`pdev`)
+### Developer Toolkit (`dev`)
 
-All dev scripts are accessible through `./pdev`:
+All dev scripts are accessible through `./dev`:
 
 ```bash
-./pdev              # Interactive picker (uses gum if installed, numbered fallback)
-./pdev check        # Run a command directly
-./pdev test unit    # Subcommands supported
-./pdev --help       # List all commands
+./dev              # Interactive picker (uses gum if installed, numbered fallback)
+./dev check        # Run a command directly
+./dev test unit    # Subcommands supported
+./dev --help       # List all commands
 ```
 
-![pdev interactive menu](../media/pdev-menu.jpg)
+![dev interactive menu](../media/dev-menu.jpg)
 
 **Available commands:**
 
@@ -260,34 +261,35 @@ All dev scripts are accessible through `./pdev`:
 | `check security` | Gosec security scan |
 | `check docs` | Validate docs JSON |
 | `format dashboard` | Run Prettier on dashboard sources |
-| `test` | All tests (unit + integration + system) |
+| `test` | Unit + E2E tests |
 | `test unit` | Unit tests only |
-| `test integration` | Integration tests only |
-| `test system` | System tests only |
+| `e2e` | E2E tests (curl + CLI) |
+| `e2e curl` | E2E curl tests only |
+| `e2e cli` | E2E CLI tests only |
 | `build` | Build & run (default) |
 | `run` | Run the application |
 | `doctor` | Setup dev environment |
 
 For the fancy interactive picker, install [gum](https://github.com/charmbracelet/gum): `brew install gum`
 
-**Tip:** Add this to `~/.zshrc` to use `pdev` without `./`:
+**Tip:** Add this to `~/.zshrc` to use `dev` without `./`:
 ```bash
-pdev() { if [ -x "./pdev" ]; then ./pdev "$@"; else echo "pdev not found in current directory"; return 1; fi }
+dev() { if [ -x "./dev" ]; then ./dev "$@"; else echo "dev not found in current directory"; return 1; fi }
 ```
 
 ### Code Quality
 
 ```bash
-./pdev check              # Full non-test checks (recommended)
-./pdev format dashboard   # Fix dashboard formatting
+./dev check              # Full non-test checks (recommended)
+./dev format dashboard   # Fix dashboard formatting
 gofmt -w .                # Format code
 golangci-lint run         # Lint
-./pdev doctor             # Verify environment
+./dev doctor             # Verify environment
 ```
 
 ### Git Hooks
 
-Git hooks are installed by `./pdev doctor` (or `./scripts/install-hooks.sh`). They run on every commit:
+Git hooks are installed by `./dev doctor` (or `./scripts/install-hooks.sh`). They run on every commit:
 - `gofmt` — Format check
 - `golangci-lint` — Linting
 - `prettier` — Dashboard formatting
@@ -301,7 +303,7 @@ To manually reinstall hooks:
 
 ```bash
 # 1. Setup (first time)
-./pdev doctor
+./dev doctor
 
 # 2. Create feature branch
 git checkout -b feat/my-feature
@@ -310,7 +312,7 @@ git checkout -b feat/my-feature
 # ... edit files ...
 
 # 4. Run checks before pushing
-./pdev check
+./dev check
 
 # 5. Commit (hooks run automatically)
 git commit -m "feat: description"
@@ -374,7 +376,7 @@ pinchtab --version
 
 **First step:** Run doctor to verify your setup:
 ```bash
-./pdev doctor
+./dev doctor
 ```
 
 This will tell you exactly what's missing or misconfigured.
@@ -391,7 +393,7 @@ This will tell you exactly what's missing or misconfigured.
 
 **"Git hooks not running on commit"**
 - Run: `./scripts/install-hooks.sh`
-- Or: `./pdev doctor` (prompts to install)
+- Or: `./dev doctor` (prompts to install)
 
 **"Chrome not found"**
 - Install Chromium: `brew install chromium` (macOS)
@@ -411,7 +413,7 @@ This will tell you exactly what's missing or misconfigured.
 ## Support
 
 Issues? Check:
-1. Run `./pdev doctor` first
+1. Run `./dev doctor` first
 2. All dependencies installed and correct versions?
 3. Port 9867 available?
 4. Check logs: `tail -f pinchtab.log`

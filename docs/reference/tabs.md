@@ -57,7 +57,7 @@ pinchtab instance navigate inst_ea2e747f https://pinchtab.com
 ```bash
 curl http://localhost:9867/tabs
 # CLI Alternative
-pinchtab tabs
+pinchtab tab
 # Response
 {
   "tabs": [
@@ -75,7 +75,7 @@ Notes:
 
 - `GET /tabs` is not a fleet-wide orchestrator inventory
 - in bridge mode or shorthand mode it lists tabs from the active browser context
-- `pinchtab tabs` follows that shorthand behavior
+- `pinchtab tab` follows that shorthand behavior
 
 ### One Instance
 
@@ -204,20 +204,38 @@ This returns aggregate browser metrics for the tab's owning instance, not isolat
 
 ## Lock And Unlock
 
+Tab lock/unlock is **API-only** — no CLI commands exist yet.
+
+### Lock A Specific Tab
+
 ```bash
 curl -X POST http://localhost:9867/tabs/<tabId>/lock \
   -H "Content-Type: application/json" \
   -d '{"owner":"my-agent","ttl":60}'
-# CLI Alternative
-pinchtab tab lock <tabId> --owner my-agent --ttl 60
 ```
+
+### Lock The Active Tab
+
+```bash
+curl -X POST http://localhost:9867/tab/lock \
+  -H "Content-Type: application/json" \
+  -d '{"owner":"my-agent","ttl":60}'
+```
+
+### Unlock A Specific Tab
 
 ```bash
 curl -X POST http://localhost:9867/tabs/<tabId>/unlock \
   -H "Content-Type: application/json" \
   -d '{"owner":"my-agent"}'
-# CLI Alternative
-pinchtab tab unlock <tabId> --owner my-agent
+```
+
+### Unlock The Active Tab
+
+```bash
+curl -X POST http://localhost:9867/tab/unlock \
+  -H "Content-Type: application/json" \
+  -d '{"owner":"my-agent"}'
 ```
 
 ## Close A Tab
@@ -234,6 +252,5 @@ pinchtab tab close <tabId>
 
 ## Important Limits
 
-- there is no documented `GET /tabs/{id}` resource endpoint in the current server routes
-- `pinchtab tab info <tabId>` exists in the CLI, but it depends on a route that is not part of the current documented HTTP surface
+- **There is no `GET /tabs/{id}` endpoint** for fetching single tab info. Use `GET /tabs` to list all tabs or access tab-scoped sub-paths like `/tabs/{id}/snapshot`, `/tabs/{id}/action`, etc.
 - `GET /tabs` and `GET /instances/tabs` serve different purposes and should not be treated as interchangeable

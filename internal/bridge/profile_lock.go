@@ -25,6 +25,8 @@ import (
 
 var chromeProfileProcessLister = findChromeProfileProcesses
 var chromePIDIsRunning = isChromePIDRunning
+var killChromeProfileProcesses = killProcesses
+var isProfileOwnedByRunningPinchtabMock = isProfileOwnedByRunningPinchtab
 
 var chromeSingletonFiles = []string{
 	"SingletonLock",
@@ -58,8 +60,13 @@ func clearStaleChromeProfileLock(profileDir, errMsg string) (bool, error) {
 		if err != nil {
 			slog.Warn("failed to probe chrome lock pid; falling back to process listing", "profile", profileDir, "pid", pid, "err", err)
 		} else if running {
-			slog.Warn("chrome profile lock appears active; leaving singleton files in place", "profile", profileDir, "pid", pid)
-			return false, nil
+			// If we find the PID from the error message is still running,
+			// check if it's actually managed by another active PinchTab.
+			if owned, ptPid := isProfileOwnedByRunningPinchtabMock(profileDir); owned {
+				slog.Warn("chrome profile lock appears active and owned by another pinchtab; leaving singleton files in place", "profile", profileDir, "pid", pid, "pinchtab_pid", ptPid)
+				return false, nil
+			}
+			slog.Warn("chrome profile lock appears active but pinchtab owner is dead; proceeding with stale cleanup", "profile", profileDir, "pid", pid)
 		}
 	}
 
@@ -72,12 +79,21 @@ func clearStaleChromeProfileLock(profileDir, errMsg string) (bool, error) {
 		}
 	}
 	if len(processes) > 0 {
-		pids := make([]string, 0, len(processes))
-		for _, proc := range processes {
-			pids = append(pids, proc.PID)
+		if owned, ptPid := isProfileOwnedByRunningPinchtabMock(profileDir); owned {
+			pids := make([]string, 0, len(processes))
+			for _, proc := range processes {
+				pids = append(pids, proc.PID)
+			}
+			slog.Warn("chrome profile lock appears active and owned by another pinchtab; leaving singleton files in place", "profile", profileDir, "pids", strings.Join(pids, ","), "pinchtab_pid", ptPid)
+			return false, nil
 		}
-		slog.Warn("chrome profile lock appears active; leaving singleton files in place", "profile", profileDir, "pids", strings.Join(pids, ","))
-		return false, nil
+
+		// If no other PinchTab owns this profile, we can safely kill the stale Chrome processes.
+		slog.Warn("chrome profile lock appears active but no pinchtab owner found; killing stale processes", "profile", profileDir)
+		if err := killChromeProfileProcesses(processes); err != nil {
+			slog.Error("failed to kill stale chrome processes", "profile", profileDir, "err", err)
+			return false, nil
+		}
 	}
 
 	removed := false
@@ -96,6 +112,59 @@ func clearStaleChromeProfileLock(profileDir, errMsg string) (bool, error) {
 	}
 
 	return removed, nil
+}
+
+func isProfileOwnedByRunningPinchtab(profileDir string) (bool, int) {
+	pidFile := filepath.Join(profileDir, "pinchtab.pid")
+	data, err := os.ReadFile(pidFile)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			slog.Debug("failed to read pinchtab pid file", "path", pidFile, "err", err)
+		}
+		return false, 0
+	}
+
+	var pid int
+	if _, err := fmt.Sscanf(string(data), "%d", &pid); err != nil {
+		slog.Debug("failed to parse pinchtab pid file", "path", pidFile, "err", err)
+		return false, 0
+	}
+
+	if pid == os.Getpid() {
+		return false, pid // It's us
+	}
+
+	running, err := chromePIDIsRunning(pid)
+	if err == nil && running {
+		// Even if the PID is running, check if it's actually a pinchtab process
+		// to handle PID reuse.
+		if isPinchTabProcess(pid) {
+			slog.Debug("profile is owned by another active pinchtab", "profile", profileDir, "pid", pid)
+			return true, pid
+		}
+		slog.Debug("PID in lockfile is running but not a pinchtab process (PID reuse)", "profile", profileDir, "pid", pid)
+	} else {
+		slog.Debug("PID in lockfile is not running", "profile", profileDir, "pid", pid, "err", err)
+	}
+
+	return false, 0
+}
+
+func AcquireProfileLock(profileDir string) error {
+	if profileDir == "" {
+		return nil
+	}
+	if err := os.MkdirAll(profileDir, 0755); err != nil {
+		return fmt.Errorf("mkdir profile dir: %w", err)
+	}
+
+	if owned, pid := isProfileOwnedByRunningPinchtab(profileDir); owned {
+		return fmt.Errorf("profile %s is already in use by pinchtab process %d", profileDir, pid)
+	}
+
+	pidFile := filepath.Join(profileDir, "pinchtab.pid")
+	slog.Debug("acquiring profile lock", "profile", profileDir, "pid", os.Getpid())
+	return os.WriteFile(pidFile, []byte(fmt.Sprintf("%d", os.Getpid())), 0644)
 }
 
 func extractChromeProfileLockPID(msg string) (int, bool) {

@@ -105,7 +105,7 @@ func NewOrchestratorWithRunner(baseDir string, runner HostRunner) *Orchestrator 
 		if err := installStableBinary(exe, stableBin); err != nil {
 			slog.Warn("failed to install pinchtab binary", "path", stableBin, "err", err)
 		} else {
-			slog.Info("installed pinchtab binary", "path", stableBin)
+			slog.Debug("installed pinchtab binary", "path", stableBin)
 		}
 	}
 
@@ -159,7 +159,6 @@ func (o *Orchestrator) SetAllocationPolicy(name string) error {
 		return err
 	}
 	o.instanceMgr.Allocator.SetPolicy(p)
-	slog.Info("allocation policy changed", "policy", name)
 	return nil
 }
 

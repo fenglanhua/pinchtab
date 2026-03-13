@@ -58,15 +58,20 @@ func TestClearStaleChromeProfileLockRemovesSingletonFiles(t *testing.T) {
 
 	orig := chromeProfileProcessLister
 	origPID := chromePIDIsRunning
+	origMock := isProfileOwnedByRunningPinchtabMock
 	chromeProfileProcessLister = func(string) ([]chromeProfileProcess, error) {
 		return nil, nil
 	}
 	chromePIDIsRunning = func(int) (bool, error) {
 		return false, nil
 	}
+	isProfileOwnedByRunningPinchtabMock = func(string) (bool, int) {
+		return false, 0
+	}
 	t.Cleanup(func() {
 		chromeProfileProcessLister = orig
 		chromePIDIsRunning = origPID
+		isProfileOwnedByRunningPinchtabMock = origMock
 	})
 
 	removed, err := clearStaleChromeProfileLock(profileDir, "")
@@ -93,15 +98,20 @@ func TestClearStaleChromeProfileLockLeavesActiveProfileUntouched(t *testing.T) {
 
 	orig := chromeProfileProcessLister
 	origPID := chromePIDIsRunning
+	origMock := isProfileOwnedByRunningPinchtabMock
 	chromeProfileProcessLister = func(string) ([]chromeProfileProcess, error) {
 		return []chromeProfileProcess{{PID: "36", Command: "/usr/bin/chromium-browser --user-data-dir=" + profileDir}}, nil
 	}
 	chromePIDIsRunning = func(int) (bool, error) {
 		return false, nil
 	}
+	isProfileOwnedByRunningPinchtabMock = func(string) (bool, int) {
+		return true, 1234
+	}
 	t.Cleanup(func() {
 		chromeProfileProcessLister = orig
 		chromePIDIsRunning = origPID
+		isProfileOwnedByRunningPinchtabMock = origMock
 	})
 
 	removed, err := clearStaleChromeProfileLock(profileDir, "")
@@ -125,6 +135,7 @@ func TestClearStaleChromeProfileLockFallsBackToPIDProbe(t *testing.T) {
 
 	orig := chromeProfileProcessLister
 	origPID := chromePIDIsRunning
+	origMock := isProfileOwnedByRunningPinchtabMock
 	chromeProfileProcessLister = func(string) ([]chromeProfileProcess, error) {
 		return nil, os.ErrPermission
 	}
@@ -134,9 +145,13 @@ func TestClearStaleChromeProfileLockFallsBackToPIDProbe(t *testing.T) {
 		}
 		return false, nil
 	}
+	isProfileOwnedByRunningPinchtabMock = func(string) (bool, int) {
+		return false, 0
+	}
 	t.Cleanup(func() {
 		chromeProfileProcessLister = orig
 		chromePIDIsRunning = origPID
+		isProfileOwnedByRunningPinchtabMock = origMock
 	})
 
 	removed, err := clearStaleChromeProfileLock(profileDir, "another Chromium process (36)")

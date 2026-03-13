@@ -34,12 +34,14 @@ pinchtab instances
 
 ## Start An Instance
 
+### Primary: Start by profileId and mode
+
 ```bash
 curl -X POST http://localhost:9867/instances/start \
   -H "Content-Type: application/json" \
-  -d '{"profileId":"278be873adeb","mode":"headed","port":"9999"}'
+  -d '{"profileId":"prof_278be873","mode":"headed","port":"9999"}'
 # CLI Alternative
-pinchtab instance start --profileId 278be873adeb --mode headed --port 9999
+pinchtab instance start --profileId prof_278be873 --mode headed --port 9999
 # Response
 {
   "id": "inst_ea2e747f",
@@ -54,10 +56,34 @@ pinchtab instance start --profileId 278be873adeb --mode headed --port 9999
 
 Notes:
 
-- `POST /instances/start` is the primary endpoint.
-
 - if `profileId` is omitted, PinchTab creates an auto-generated temporary profile such as `instance-...`
 - if `port` is omitted, PinchTab allocates one from the configured instance port range
+
+### Alternative: Start by profile name
+
+You can also start an instance using a profile name and headless flag:
+
+```bash
+curl -X POST http://localhost:9867/instances/launch \
+  -H "Content-Type: application/json" \
+  -d '{"name":"work","headless":false}'
+# Response
+{
+  "id": "inst_ea2e747f",
+  "profileId": "prof_278be873",
+  "profileName": "work",
+  "port": "9999",
+  "headless": false,
+  "status": "starting",
+  "startTime": "2026-03-01T05:21:38.27432Z"
+}
+```
+
+The `POST /instances/launch` endpoint takes:
+- `name` — profile name (required)
+- `headless` — true for headless mode, false for headed mode (optional, defaults to true)
+
+Port is automatically allocated from the configured instance port range.
 
 ## Get One Instance
 
@@ -113,7 +139,7 @@ Stopping an instance preserves the profile unless it was a temporary auto-genera
 You can also start an instance from a profile-oriented route:
 
 ```bash
-curl -X POST http://localhost:9867/profiles/278be873adeb/start \
+curl -X POST http://localhost:9867/profiles/prof_278be873/start \
   -H "Content-Type: application/json" \
   -d '{"headless":false,"port":"9999"}'
 # Response

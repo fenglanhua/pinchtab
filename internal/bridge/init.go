@@ -142,9 +142,12 @@ func setupAllocator(cfg *config.RuntimeConfig) (context.Context, context.CancelF
 	opts = append(opts,
 		chromedp.Flag("disable-automation", ""),
 		chromedp.Flag("disable-blink-features", "AutomationControlled"),
+		chromedp.Flag("disable-session-crashed-bubble", ""),
 		chromedp.Flag("disable-dev-shm-usage", ""),
+		chromedp.Flag("hide-crash-restore-bubble", ""),
 		chromedp.Flag("no-first-run", ""),
 		chromedp.Flag("no-default-browser-check", ""),
+		chromedp.Flag("noerrdialogs", ""),
 	)
 
 	// Extension loading
@@ -241,10 +244,16 @@ func startChromeWithRecovery(parentCtx context.Context, cfg *config.RuntimeConfi
 	select {
 	case res := <-runCh:
 		err = res.err
+		if err != nil {
+			slog.Debug("chrome initial action failed", "error", err.Error())
+		} else {
+			slog.Debug("chrome initial action succeeded")
+		}
 	case <-time.After(chromeStartupTimeout):
 		// Chrome started (ExecAllocator launched the process) but never announced
 		// its DevTools URL via stderr.  Wrap as DeadlineExceeded so isStartupTimeout
 		// recognises it, then fall through to the cleanup + fallback logic below.
+		slog.Debug("chrome startup timed out", "timeout", chromeStartupTimeout)
 		err = fmt.Errorf("chrome startup timeout after %v: %w", chromeStartupTimeout, context.DeadlineExceeded)
 	}
 
@@ -254,8 +263,10 @@ func startChromeWithRecovery(parentCtx context.Context, cfg *config.RuntimeConfi
 		allocCancel()
 
 		errMsg := err.Error()
+		slog.Debug("evaluating chrome startup error", "error", errMsg)
 
 		if !retriedProfileLock && isChromeProfileLockError(errMsg) {
+			slog.Debug("detected chrome profile lock error", "profile", cfg.ProfileDir)
 			recovered, recoverErr := clearStaleChromeProfileLock(cfg.ProfileDir, errMsg)
 			if recoverErr != nil {
 				slog.Warn("failed to recover chrome profile lock", "profile", cfg.ProfileDir, "err", recoverErr)
@@ -459,9 +470,11 @@ func buildChromeArgs(cfg *config.RuntimeConfig, port int) []string {
 		"--disable-background-timer-throttling",
 		"--disable-backgrounding-occluded-windows",
 		"--disable-breakpad",
+		"--disable-session-crashed-bubble",
 		"--disable-client-side-phishing-detection",
 		"--disable-default-apps",
 		"--disable-dev-shm-usage",
+		"--hide-crash-restore-bubble",
 		"--disable-hang-monitor",
 		"--disable-ipc-flooding-protection",
 		"--disable-popup-blocking",
@@ -472,6 +485,7 @@ func buildChromeArgs(cfg *config.RuntimeConfig, port int) []string {
 		"--metrics-recording-only",
 		"--no-first-run",
 		"--no-default-browser-check",
+		"--noerrdialogs",
 		"--safebrowsing-disable-auto-update",
 		"--password-store=basic",
 		"--use-mock-keychain",

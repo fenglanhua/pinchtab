@@ -8,6 +8,28 @@ For security posture, token usage, sensitive endpoint policy, and IDPI guidance,
 
 ## Commands
 
+### `pinchtab config`
+
+Opens the interactive config overview/editor.
+
+It currently exposes these high-signal settings directly:
+
+- `multiInstance.strategy`
+- `multiInstance.allocationPolicy`
+- `instanceDefaults.stealthLevel`
+- `instanceDefaults.tabEvictionPolicy`
+
+It also shows:
+
+- the active config file path
+- the dashboard URL when the server is running
+- the masked server token
+- a `Copy token` action for clipboard/manual copy
+
+```bash
+pinchtab config
+```
+
 ### `pinchtab config init`
 
 Creates a default config file at the standard user config location.
@@ -95,6 +117,8 @@ The currently supported operational env vars are:
 - `CHROME_BIN`
 
 Everything else should be configured in `config.json`.
+
+For the common local workflow, prefer the interactive `pinchtab config` screen for everyday changes and use `get`, `set`, or `patch` when you need an exact scripted edit.
 
 ## Config File Location
 

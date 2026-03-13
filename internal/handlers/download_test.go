@@ -1,6 +1,9 @@
 package handlers
 
 import (
+	"context"
+	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -29,6 +32,21 @@ func TestHandleDownload_EmptyURL(t *testing.T) {
 }
 
 func TestValidateDownloadURL(t *testing.T) {
+	originalResolver := resolveDownloadHostIPs
+	t.Cleanup(func() {
+		resolveDownloadHostIPs = originalResolver
+	})
+	resolveDownloadHostIPs = func(ctx context.Context, network, host string) ([]net.IP, error) {
+		switch host {
+		case "pinchtab.com":
+			return []net.IP{net.ParseIP("93.184.216.34")}, nil
+		case "localhost":
+			return []net.IP{net.ParseIP("127.0.0.1")}, nil
+		default:
+			return nil, errors.New("not found")
+		}
+	}
+
 	tests := []struct {
 		name    string
 		url     string

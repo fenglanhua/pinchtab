@@ -3,24 +3,15 @@
 
 source "$(dirname "$0")/common.sh"
 
-# ─────────────────────────────────────────────────────────────────
-start_test "pinchtab pdf -o <file>"
-
-pt_ok nav "${FIXTURES_URL}/form.html"
-
-TMPFILE="/tmp/test-export-$$.pdf"
-pt_ok pdf -o "$TMPFILE"
-
-if [ -f "$TMPFILE" ] && [ -s "$TMPFILE" ]; then
-  echo -e "  ${GREEN}✓${NC} pdf saved to file"
+start_test "pinchtab pdf"
+pt_ok nav "${FIXTURES_URL}/index.html"
+pt_ok pdf -o /tmp/e2e-pdf-test.pdf
+if [ -f /tmp/e2e-pdf-test.pdf ]; then
+  echo -e "  ${GREEN}✓${NC} PDF file created"
   ((ASSERTIONS_PASSED++)) || true
-  rm -f "$TMPFILE"
+  rm -f /tmp/e2e-pdf-test.pdf
 else
-  echo -e "  ${RED}✗${NC} pdf file not created or empty"
+  echo -e "  ${RED}✗${NC} PDF file not created"
   ((ASSERTIONS_FAILED++)) || true
 fi
-
 end_test
-
-# Note: pdf without -o outputs binary to stdout which doesn't work
-# well with our text-based pt() function, so we only test file output

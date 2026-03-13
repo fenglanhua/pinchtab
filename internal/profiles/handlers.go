@@ -135,9 +135,9 @@ func (pm *ProfileManager) handleImport(w http.ResponseWriter, r *http.Request) {
 
 func (pm *ProfileManager) handleUpdateMeta(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name        string `json:"name"`
-		Description string `json:"description"`
-		UseWhen     string `json:"useWhen"`
+		Name        string  `json:"name"`
+		Description *string `json:"description"`
+		UseWhen     *string `json:"useWhen"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		web.Error(w, 400, err)
@@ -149,11 +149,11 @@ func (pm *ProfileManager) handleUpdateMeta(w http.ResponseWriter, r *http.Reques
 	}
 
 	updates := make(map[string]string)
-	if req.Description != "" {
-		updates["description"] = req.Description
+	if req.Description != nil {
+		updates["description"] = *req.Description
 	}
-	if req.UseWhen != "" {
-		updates["useWhen"] = req.UseWhen
+	if req.UseWhen != nil {
+		updates["useWhen"] = *req.UseWhen
 	}
 
 	if err := pm.UpdateMeta(req.Name, updates); err != nil {
@@ -250,9 +250,9 @@ func (pm *ProfileManager) handleUpdateByID(w http.ResponseWriter, r *http.Reques
 	}
 
 	var req struct {
-		Name        string `json:"name"`
-		UseWhen     string `json:"useWhen"`
-		Description string `json:"description"`
+		Name        *string `json:"name"`
+		UseWhen     *string `json:"useWhen"`
+		Description *string `json:"description"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		web.Error(w, 400, fmt.Errorf("invalid JSON"))
@@ -260,8 +260,8 @@ func (pm *ProfileManager) handleUpdateByID(w http.ResponseWriter, r *http.Reques
 	}
 
 	finalName := name
-	if req.Name != "" && req.Name != name {
-		if err := pm.Rename(name, req.Name); err != nil {
+	if req.Name != nil && *req.Name != name {
+		if err := pm.Rename(name, *req.Name); err != nil {
 			if strings.Contains(err.Error(), "already exists") {
 				web.Error(w, 409, err)
 			} else if strings.Contains(err.Error(), "cannot contain") || strings.Contains(err.Error(), "cannot be empty") {
@@ -271,15 +271,15 @@ func (pm *ProfileManager) handleUpdateByID(w http.ResponseWriter, r *http.Reques
 			}
 			return
 		}
-		finalName = req.Name
+		finalName = *req.Name
 	}
 
 	updates := make(map[string]string)
-	if req.Description != "" {
-		updates["description"] = req.Description
+	if req.Description != nil {
+		updates["description"] = *req.Description
 	}
-	if req.UseWhen != "" {
-		updates["useWhen"] = req.UseWhen
+	if req.UseWhen != nil {
+		updates["useWhen"] = *req.UseWhen
 	}
 	if len(updates) > 0 {
 		if err := pm.UpdateMeta(finalName, updates); err != nil {

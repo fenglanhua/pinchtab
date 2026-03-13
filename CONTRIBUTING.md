@@ -5,7 +5,7 @@
 ```bash
 git clone https://github.com/pinchtab/pinchtab.git
 cd pinchtab
-./pdev doctor
+./dev doctor
 ```
 
 Requires **Go 1.25+** and **Google Chrome**.
@@ -13,8 +13,8 @@ Requires **Go 1.25+** and **Google Chrome**.
 ## Development Workflow
 
 1. Make your changes
-2. Run `./pdev check`
-3. Run `./pdev test`
+2. Run `./dev check`
+3. Run `./dev test`
 4. Commit — pre-commit hook runs checks automatically
 5. Push: `git pull --rebase && git push`
 
@@ -31,20 +31,21 @@ This significantly speeds up the merge process. Thank you! 🙏
 ## Checks and Tests
 
 ```bash
-./pdev doctor        # setup environment and hooks
-./pdev check         # format, vet, build, lint
-./pdev format dashboard
-./pdev test          # unit + integration + system
-./pdev test unit
-./pdev test integration
-./pdev test system
+./dev doctor        # setup environment and hooks
+./dev check         # format, vet, build, lint
+./dev format dashboard
+./dev test          # unit + E2E tests
+./dev test unit     # unit tests only
+./dev e2e           # E2E tests (curl + CLI)
+./dev e2e curl      # curl tests only
+./dev e2e cli       # CLI tests only
 ```
 
-If you want the raw commands instead of `pdev`:
+If you want the raw commands instead of `dev`:
 
 ```bash
 go test ./... -count=1 -v
-go test -tags integration ./tests/integration -v'
+./dev e2e
 ```
 
 ## Style
@@ -58,7 +59,7 @@ go test -tags integration ./tests/integration -v'
 
 ## Hooks
 
-`./pdev doctor` offers to install the git hooks. They enforce formatting and checks before commit.
+`./dev doctor` offers to install the git hooks. They enforce formatting and checks before commit.
 You can also install them directly with:
 
 ```bash

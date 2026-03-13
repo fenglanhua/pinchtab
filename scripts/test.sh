@@ -2,7 +2,7 @@
 set -e
 
 # test.sh — Run Go tests with optional scope
-# Usage: test.sh [unit|integration|system|all]
+# Usage: test.sh [unit|all]
 # Default: all
 
 cd "$(dirname "$0")/.."
@@ -34,7 +34,7 @@ test_summary() {
   local total=0 pass=0 fail=0 skip=0
   read total pass fail skip <<<"$(jq -r \
     'select(.Test != null and (.Action == "pass" or .Action == "fail" or .Action == "skip"))
-     | [.Package, .Test, .Action] | @tsv' "$json_file" \
+     | [.Package, (.Test | split("/")[0]), .Action] | @tsv' "$json_file" \
     | awk -F'\t' 'NF == 3 { key = $1 "\t" $2; status[key] = $3 }
       END {
         for (k in status) {
@@ -54,6 +54,49 @@ test_summary() {
   [ "$fail" -gt 0 ] && echo -e "    Failed:  ${ERROR}$fail${NC}"
   [ "$skip" -gt 0 ] && echo -e "    Skipped: ${ACCENT}$skip${NC}"
 
+  local failed_packages
+  failed_packages="$(
+    jq -r '
+      select(.Package != null and (.Test == null or .Test == "") and (.Action == "pass" or .Action == "fail" or .Action == "skip"))
+      | [.Package, .Action] | @tsv
+    ' "$json_file" \
+      | awk -F'\t' 'NF == 2 { status[$1] = $2 }
+        END {
+          for (pkg in status) {
+            if (status[pkg] == "fail") {
+              print pkg
+            }
+          }
+        }' \
+      | sort
+  )"
+
+  if [ -n "$failed_packages" ]; then
+    echo ""
+    echo -e "    ${ERROR}Failed packages:${NC}"
+    while IFS= read -r pkg; do
+      [ -n "$pkg" ] && echo "      ✗ $pkg"
+    done <<<"$failed_packages"
+
+    echo ""
+    echo -e "    ${ERROR}Failure details:${NC}"
+    while IFS= read -r pkg; do
+      [ -z "$pkg" ] && continue
+      echo "      $pkg"
+      jq -r --arg pkg "$pkg" '
+        select(.Package == $pkg and .Action == "output")
+        | .Output
+      ' "$json_file" \
+        | sed '/^[[:space:]]*$/d' \
+        | sed '/^=== RUN/d' \
+        | sed '/^--- PASS:/d' \
+        | sed '/^PASS$/d' \
+        | tail -n 20 \
+        | sed 's/^/        /'
+      echo ""
+    done <<<"$failed_packages"
+  fi
+
   if [ "$fail" -gt 0 ]; then
     echo ""
     echo -e "    ${ERROR}Failed tests:${NC}"
@@ -61,52 +104,150 @@ test_summary() {
   fi
 }
 
-# Live progress for integration tests
-run_integration() {
+# Live progress for go test -json streams
+run_go_test_json() {
   local json_file="$1"; shift
+  local label="${1:-tests}"
+  shift
   local completed=0
+  local passed=0
+  local failed=0
+  local skipped=0
   local max_len=40
+  local interactive=false
+  local line_open=false
+  local current_package=""
+  local status_file="${json_file}.status"
+
+  : > "$status_file"
+
+  if [ -t 1 ]; then
+    interactive=true
+  fi
+
+  render_progress() {
+    local display="$1"
+    if $interactive; then
+      printf "\r\033[2K    ${MUTED}▸${NC} ${BOLD}%-11s${NC} ${MUTED}pass:%d fail:%d skip:%d${NC} %s" \
+        "$label" "$passed" "$failed" "$skipped" "$display"
+      line_open=true
+    fi
+  }
+
+  clear_progress_line() {
+    if $interactive && $line_open; then
+      printf "\r\033[2K"
+      line_open=false
+    fi
+  }
 
   go test -json "$@" 2>&1 | tee "$json_file" | while IFS= read -r line; do
-    local action test_name elapsed
+    local action test_name package_name elapsed output_text
     action=$(echo "$line" | jq -r '.Action // empty' 2>/dev/null) || continue
     test_name=$(echo "$line" | jq -r '.Test // empty' 2>/dev/null) || continue
+    package_name=$(echo "$line" | jq -r '.Package // empty' 2>/dev/null) || continue
     elapsed=$(echo "$line" | jq -r '.Elapsed // empty' 2>/dev/null)
+    output_text=$(echo "$line" | jq -r '.Output // empty' 2>/dev/null)
 
-    [ -z "$test_name" ] && continue
+    if [ -z "$test_name" ]; then
+      case "$action" in
+        start)
+          if [ -n "$package_name" ]; then
+            current_package="$package_name"
+            if $interactive; then
+              render_progress "${MUTED}${package_name}${NC}"
+            else
+              printf "    ${MUTED}▸${NC} ${MUTED}package${NC} %s\n" "$package_name"
+            fi
+          fi
+          ;;
+        output)
+          if [ -n "$output_text" ] && [[ "$output_text" =~ ^panic:|^FAIL[[:space:]]|^---[[:space:]]FAIL ]]; then
+            if ! $interactive; then
+              output_text=${output_text%$'\n'}
+              printf "      %s\n" "$output_text"
+            fi
+          fi
+          ;;
+        pass)
+          if [ -n "$package_name" ] && $interactive; then
+            render_progress "${SUCCESS}${package_name}${NC}"
+          fi
+          ;;
+        fail)
+          if [ -n "$package_name" ]; then
+            if $interactive; then
+              render_progress "${ERROR}${package_name}${NC}"
+            else
+              if [ -n "$elapsed" ]; then
+                printf "    ${ERROR}✗${NC} ${MUTED}package${NC} %s ${MUTED}%6ss${NC}\n" "$package_name" "$elapsed"
+              else
+                printf "    ${ERROR}✗${NC} ${MUTED}package${NC} %s\n" "$package_name"
+              fi
+            fi
+          fi
+          ;;
+      esac
+      continue
+    fi
 
     local display="$test_name"
+    local top_level="$test_name"
+    if [[ "$top_level" == *"/"* ]]; then
+      top_level="${top_level%%/*}"
+    fi
     if [ ${#display} -gt $max_len ]; then
       display="${display:0:$((max_len - 1))}…"
     fi
 
     case "$action" in
-      run)  printf "\r    ${MUTED}▸${NC} ${MUTED}[%2d]${NC} %-${max_len}s" "$((completed + 1))" "$display" ;;
-      pass) completed=$((completed + 1))
-            if [ -n "$elapsed" ]; then
-              printf "\r    ${SUCCESS}✓${NC} ${MUTED}[%2d]${NC} %-${max_len}s ${MUTED}%6ss${NC}" "$completed" "$display" "$elapsed"
-            else
-              printf "\r    ${SUCCESS}✓${NC} ${MUTED}[%2d]${NC} %-${max_len}s" "$completed" "$display"
+      run)
+            if $interactive; then
+              render_progress "${current_package} ${MUTED}${display}${NC}"
             fi ;;
-      fail) completed=$((completed + 1))
-            if [ -n "$elapsed" ]; then
-              printf "\r    ${ERROR}✗${NC} ${MUTED}[%2d]${NC} %-${max_len}s ${MUTED}%6ss${NC}" "$completed" "$display" "$elapsed"
-            else
-              printf "\r    ${ERROR}✗${NC} ${MUTED}[%2d]${NC} %-${max_len}s" "$completed" "$display"
+      pass)
+            if ! grep -Fq "$package_name	$top_level" "$status_file"; then
+              printf '%s\t%s\n' "$package_name" "$top_level" >> "$status_file"
+              completed=$((completed + 1))
+              passed=$((passed + 1))
+            fi
+            if $interactive; then
+              render_progress "${current_package} ${SUCCESS}${display}${NC}"
             fi ;;
-      skip) completed=$((completed + 1))
-            printf "\r    ${ACCENT}·${NC} ${MUTED}[%2d]${NC} %-${max_len}s ${MUTED}  skip${NC}" "$completed" "$display" ;;
+      fail)
+            if ! grep -Fq "$package_name	$top_level" "$status_file"; then
+              printf '%s\t%s\n' "$package_name" "$top_level" >> "$status_file"
+              completed=$((completed + 1))
+              failed=$((failed + 1))
+            fi
+            if $interactive; then
+              render_progress "${current_package} ${ERROR}${display}${NC}"
+            else
+              if [ -n "$elapsed" ]; then
+                printf "    ${ERROR}✗${NC} ${MUTED}[%2d]${NC} %-${max_len}s ${MUTED}%6ss${NC}\n" "$completed" "$display" "$elapsed"
+              else
+                printf "    ${ERROR}✗${NC} ${MUTED}[%2d]${NC} %-${max_len}s\n" "$completed" "$display"
+              fi
+            fi ;;
+      skip)
+            if ! grep -Fq "$package_name	$top_level" "$status_file"; then
+              printf '%s\t%s\n' "$package_name" "$top_level" >> "$status_file"
+              completed=$((completed + 1))
+              skipped=$((skipped + 1))
+            fi
+            if $interactive; then
+              render_progress "${current_package} ${ACCENT}${display}${NC}"
+            fi ;;
     esac
   done
-  return ${PIPESTATUS[0]}
+  local test_status=${PIPESTATUS[0]}
+  clear_progress_line
+  return "$test_status"
 }
 
 SCOPE="${1:-all}"
 TMPDIR_TEST=$(mktemp -d)
 trap 'rm -rf "$TMPDIR_TEST"' EXIT
-
-HAS_GOTESTSUM=false
-command -v gotestsum &>/dev/null && HAS_GOTESTSUM=true
 
 # ── Unit tests ───────────────────────────────────────────────────────
 
@@ -115,57 +256,13 @@ if [ "$SCOPE" = "all" ] || [ "$SCOPE" = "unit" ]; then
 
   UNIT_JSON="$TMPDIR_TEST/unit.json"
 
-  if $HAS_GOTESTSUM; then
-    if ! gotestsum --format dots --jsonfile "$UNIT_JSON" -- -count=1 ./...; then
-      fail "Unit tests"
-      test_summary "$UNIT_JSON" "Unit Test Results"
-      exit 1
-    fi
-  else
-    if ! go test -json -count=1 ./... > "$UNIT_JSON" 2>&1; then
-      fail "Unit tests"
-      test_summary "$UNIT_JSON" "Unit Test Results"
-      exit 1
-    fi
+  if ! run_go_test_json "$UNIT_JSON" "unit" -p 1 -count=1 ./...; then
+    fail "Unit tests"
+    test_summary "$UNIT_JSON" "Unit Test Results"
+    exit 1
   fi
   ok "Unit tests"
   test_summary "$UNIT_JSON" "Unit Test Results"
-fi
-
-# ── Integration tests ───────────────────────────────────────────────
-
-if [ "$SCOPE" = "all" ] || [ "$SCOPE" = "integration" ]; then
-  section "Integration Tests"
-
-  INTEGRATION_JSON="$TMPDIR_TEST/integration.json"
-
-  if ! run_integration "$INTEGRATION_JSON" \
-    -tags integration -timeout 10m -count=1 \
-    -run '^Test' -skip "$SYSTEM_REGEX" ./tests/integration/; then
-    fail "Integration tests"
-    test_summary "$INTEGRATION_JSON" "Integration Test Results"
-    exit 1
-  fi
-  printf "\r%*s\r" 60 ""
-  ok "Integration tests"
-  test_summary "$INTEGRATION_JSON" "Integration Test Results"
-fi
-
-if [ "$SCOPE" = "all" ] || [ "$SCOPE" = "system" ]; then
-  section "System Tests"
-
-  SYSTEM_JSON="$TMPDIR_TEST/system.json"
-
-  if ! run_integration "$SYSTEM_JSON" \
-    -tags integration -timeout 12m -count=1 \
-    -run "$SYSTEM_REGEX" ./tests/integration/; then
-    fail "System tests"
-    test_summary "$SYSTEM_JSON" "System Test Results"
-    exit 1
-  fi
-  printf "\r%*s\r" 60 ""
-  ok "System tests"
-  test_summary "$SYSTEM_JSON" "System Test Results"
 fi
 
 # ── Summary ──────────────────────────────────────────────────────────

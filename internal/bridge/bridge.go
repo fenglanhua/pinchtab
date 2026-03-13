@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"sync"
 	"time"
 
@@ -116,7 +117,31 @@ func (b *Bridge) EnsureChrome(cfg *config.RuntimeConfig) error {
 		return nil // Already has browser context
 	}
 
+	slog.Debug("ensure chrome called", "headless", cfg.Headless, "profile", cfg.ProfileDir)
+
 	// Initialize Chrome if not already done
+	if err := AcquireProfileLock(cfg.ProfileDir); err != nil {
+		if cfg.Headless {
+			// If we are in headless mode, we are more flexible.
+			// Instead of failing, we can use a unique temporary profile dir.
+			uniqueDir, tmpErr := os.MkdirTemp("", "pinchtab-profile-*")
+			if tmpErr == nil {
+				slog.Warn("profile in use; using unique temporary profile for headless instance",
+					"requested", cfg.ProfileDir, "using", uniqueDir, "reason", err.Error())
+				cfg.ProfileDir = uniqueDir
+				// Re-acquire lock for the new temp dir (should always succeed)
+				_ = AcquireProfileLock(cfg.ProfileDir)
+			} else {
+				slog.Error("cannot acquire profile lock and failed to create temp dir", "profile", cfg.ProfileDir, "err", err.Error(), "tmpErr", tmpErr.Error())
+				return fmt.Errorf("profile lock: %w (temp dir failed: %v)", err, tmpErr)
+			}
+		} else {
+			slog.Error("cannot acquire profile lock; another pinchtab may be active", "profile", cfg.ProfileDir, "err", err.Error())
+			return fmt.Errorf("profile lock: %w", err)
+		}
+	}
+
+	slog.Info("starting chrome with confirmed profile", "headless", cfg.Headless, "profile", cfg.ProfileDir)
 	allocCtx, allocCancel, browserCtx, browserCancel, err := InitChrome(cfg)
 	if err != nil {
 		return fmt.Errorf("failed to initialize chrome: %w", err)

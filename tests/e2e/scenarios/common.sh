@@ -86,7 +86,7 @@ start_test() {
 end_test() {
   local end_time=$(get_time_ms)
   local duration=$((end_time - TEST_START_TIME))
-  
+
   if [ "$ASSERTIONS_FAILED" -eq 0 ]; then
     echo -e "${GREEN}✓ ${CURRENT_TEST} passed${NC} ${MUTED}(${duration}ms)${NC}\n"
     TEST_RESULTS+=("✅ ${CURRENT_TEST}|${duration}ms|passed")
@@ -100,53 +100,16 @@ end_test() {
   ASSERTIONS_FAILED=0
 }
 
-# Assert HTTP status
-assert_status() {
-  local expected="$1"
-  local url="$2"
-  local method="${3:-GET}"
-  local body="${4:-}"
-  
-  local actual
-  if [ -n "$body" ]; then
-    actual=$(curl -s -o /dev/null -w '%{http_code}' -X "$method" -H "Content-Type: application/json" -d "$body" "$url")
-  else
-    actual=$(curl -s -o /dev/null -w '%{http_code}' -X "$method" "$url")
-  fi
-  
-  if [ "$actual" = "$expected" ]; then
-    echo -e "  ${GREEN}✓${NC} $method $url → $actual"
-    ((ASSERTIONS_PASSED++)) || true
-  else
-    echo -e "  ${RED}✗${NC} $method $url → $actual (expected $expected)"
-    ((ASSERTIONS_FAILED++)) || true
-  fi
-}
-
-# Assert command succeeds (exit 0)
-assert_ok() {
-  local desc="$1"
-  shift
-  
-  if "$@" >/dev/null 2>&1; then
-    echo -e "  ${GREEN}✓${NC} $desc"
-    ((ASSERTIONS_PASSED++)) || true
-  else
-    echo -e "  ${RED}✗${NC} $desc (exit $?)"
-    ((ASSERTIONS_FAILED++)) || true
-  fi
-}
-
 # Assert JSON field equals value
 assert_json_eq() {
   local json="$1"
   local path="$2"
   local expected="$3"
   local desc="${4:-$path = $expected}"
-  
+
   local actual
   actual=$(echo "$json" | jq -r "$path")
-  
+
   if [ "$actual" = "$expected" ]; then
     echo -e "  ${GREEN}✓${NC} $desc"
     ((ASSERTIONS_PASSED++)) || true
@@ -162,10 +125,10 @@ assert_json_contains() {
   local path="$2"
   local needle="$3"
   local desc="${4:-$path contains '$needle'}"
-  
+
   local actual
   actual=$(echo "$json" | jq -r "$path")
-  
+
   if [[ "$actual" == *"$needle"* ]]; then
     echo -e "  ${GREEN}✓${NC} $desc"
     ((ASSERTIONS_PASSED++)) || true
@@ -181,10 +144,10 @@ assert_json_length() {
   local path="$2"
   local expected="$3"
   local desc="${4:-$path length = $expected}"
-  
+
   local actual
   actual=$(echo "$json" | jq "$path | length")
-  
+
   if [ "$actual" -eq "$expected" ]; then
     echo -e "  ${GREEN}✓${NC} $desc"
     ((ASSERTIONS_PASSED++)) || true
@@ -200,10 +163,10 @@ assert_json_length_gte() {
   local path="$2"
   local expected="$3"
   local desc="${4:-$path length >= $expected}"
-  
+
   local actual
   actual=$(echo "$json" | jq "$path | length")
-  
+
   if [ "$actual" -ge "$expected" ]; then
     echo -e "  ${GREEN}✓${NC} $desc"
     ((ASSERTIONS_PASSED++)) || true
@@ -218,7 +181,7 @@ assert_json_exists() {
   local json="$1"
   local path="$2"
   local desc="${3:-$path exists}"
-  
+
   if echo "$json" | jq -e "$path" >/dev/null 2>&1; then
     echo -e "  ${GREEN}✓${NC} $desc"
     ((ASSERTIONS_PASSED++)) || true
@@ -233,7 +196,7 @@ assert_contains() {
   local haystack="$1"
   local needle="$2"
   local desc="${3:-contains '$needle'}"
-  
+
   if echo "$haystack" | grep -q "$needle"; then
     echo -e "  ${GREEN}✓${NC} $desc"
     ((ASSERTIONS_PASSED++)) || true
@@ -286,10 +249,10 @@ assert_http_error() {
   local expected_status="$1"
   local error_pattern="${2:-error}"
   local desc="${3:-HTTP $expected_status error}"
-  
+
   local actual_status
   actual_status=$(echo "$RESULT" | jq -r '.status // empty')
-  
+
   if [ "$actual_status" = "$expected_status" ] || grep -q "$error_pattern" <<< "$RESULT"; then
     echo -e "  ${GREEN}✓${NC} $desc"
     ((ASSERTIONS_PASSED++)) || true
@@ -305,7 +268,7 @@ assert_contains_any() {
   local haystack="$1"
   local patterns="$2"  # pipe-separated
   local desc="${3:-contains expected pattern}"
-  
+
   if echo "$haystack" | grep -qE "$patterns"; then
     echo -e "  ${GREEN}✓${NC} $desc"
     ((ASSERTIONS_PASSED++)) || true
@@ -347,7 +310,17 @@ pinchtab() {
 #        pt_post /path '{"json":"data"}'
 #        pt_post /path -d '{"json":"data"}'  (also works)
 pt() { pinchtab "$@"; }
-pt_get() { pinchtab GET "$1"; echo "$RESULT"; }
+
+# Truncate output for display (avoid flooding logs with base64 blobs)
+_echo_truncated() {
+  if [ ${#RESULT} -gt 1000 ]; then
+    echo "${RESULT:0:200}...[truncated ${#RESULT} chars]"
+  else
+    echo "$RESULT"
+  fi
+}
+
+pt_get() { pinchtab GET "$1"; _echo_truncated; }
 pt_post() {
   local path="$1"
   shift
@@ -356,7 +329,50 @@ pt_post() {
     shift
   fi
   pinchtab POST "$path" -d "$1"
-  echo "$RESULT"
+  _echo_truncated
+}
+
+pt_patch() {
+  local path="$1"
+  local body="$2"
+  echo -e "${BLUE}→ curl -X PATCH ${PINCHTAB_URL}$path${NC}" >&2
+  local response
+  response=$(curl -s -w "\n%{http_code}" \
+    -X PATCH \
+    "${PINCHTAB_URL}$path" \
+    -H "Content-Type: application/json" \
+    -d "$body")
+  RESULT=$(echo "$response" | head -n -1)
+  HTTP_STATUS=$(echo "$response" | tail -n 1)
+  _echo_truncated
+}
+
+pt_delete() {
+  local path="$1"
+  echo -e "${BLUE}→ curl -X DELETE ${PINCHTAB_URL}$path${NC}" >&2
+  local response
+  response=$(curl -s -w "\n%{http_code}" \
+    -X DELETE \
+    "${PINCHTAB_URL}$path")
+  RESULT=$(echo "$response" | head -n -1)
+  HTTP_STATUS=$(echo "$response" | tail -n 1)
+  _echo_truncated
+}
+
+# POST raw body (for testing malformed JSON)
+pt_post_raw() {
+  local path="$1"
+  local body="$2"
+  echo -e "${BLUE}→ curl -X POST ${PINCHTAB_URL}$path -d '$body'${NC}" >&2
+  local response
+  response=$(curl -s -w "\n%{http_code}" \
+    -X POST \
+    "${PINCHTAB_URL}$path" \
+    -H "Content-Type: application/json" \
+    -d "$body")
+  RESULT=$(echo "$response" | head -n -1)
+  HTTP_STATUS=$(echo "$response" | tail -n 1)
+  _echo_truncated
 }
 
 # ================================================================
@@ -367,7 +383,7 @@ pt_post() {
 assert_url_accessible() {
   local url="$1"
   local label="${2:-$url}"
-  
+
   if curl -sf "$url" > /dev/null 2>&1; then
     echo -e "  ${GREEN}✓${NC} GET $label"
     ((ASSERTIONS_PASSED++)) || true
@@ -389,12 +405,6 @@ assert_fixtures_accessible() {
 # Skip helper
 # ================================================================
 
-skip() {
-  local reason="$1"
-  echo -e "  ${YELLOW}⚠${NC} Skipped: $reason"
-  ((ASSERTIONS_PASSED++)) || true
-}
-
 # ================================================================
 # HTTP status assertions
 # ================================================================
@@ -402,7 +412,7 @@ skip() {
 # Assert last request returned expected status (uses $HTTP_STATUS from pinchtab())
 assert_ok() {
   local label="${1:-request}"
-  
+
   if [ "$HTTP_STATUS" = "200" ] || [ "$HTTP_STATUS" = "201" ]; then
     echo -e "  ${GREEN}✓${NC} $label → $HTTP_STATUS"
     ((ASSERTIONS_PASSED++)) || true
@@ -416,7 +426,7 @@ assert_ok() {
 assert_http_status() {
   local expected="$1"
   local label="${2:-request}"
-  
+
   if [ "$HTTP_STATUS" = "$expected" ]; then
     echo -e "  ${GREEN}✓${NC} $label → $HTTP_STATUS"
     ((ASSERTIONS_PASSED++)) || true
@@ -426,29 +436,31 @@ assert_http_status() {
   fi
 }
 
+# Assert last request returned non-200 status (error expected)
+assert_not_ok() {
+  local label="${1:-request}"
+
+  if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "201" ]; then
+    echo -e "  ${GREEN}✓${NC} $label → $HTTP_STATUS (error expected)"
+    ((ASSERTIONS_PASSED++)) || true
+  else
+    echo -e "  ${RED}✗${NC} $label: expected error, got $HTTP_STATUS"
+    ((ASSERTIONS_FAILED++)) || true
+  fi
+}
+
 # ================================================================
 # Element interaction helpers
 # ================================================================
 
-# Get ref for element by name from last snapshot
-get_ref() {
-  local name="$1"
-  echo "$RESULT" | jq -r ".nodes[] | select(.name == \"$name\") | .ref" | head -1
-}
-
-# Get ref for element by role from last snapshot
-get_ref_by_role() {
-  local role="$1"
-  echo "$RESULT" | jq -r ".nodes[] | select(.role == \"$role\") | .ref" | head -1
-}
-
 # Click a button by name (requires snapshot in $RESULT)
 click_button() {
   local name="$1"
-  local ref=$(get_ref "$name")
-  
+  local ref
+  ref=$(echo "$RESULT" | jq -r "[.nodes[] | select(.name == \"$name\") | .ref] | first // empty")
+
   if [ -n "$ref" ] && [ "$ref" != "null" ]; then
-    pt_post /action -d "{\"kind\":\"click\",\"ref\":\"${ref}\"}" > /dev/null
+    pt_post /action "{\"kind\":\"click\",\"ref\":\"${ref}\"}" > /dev/null
     echo -e "  ${GREEN}✓${NC} clicked '$name' (ref: $ref)"
     ((ASSERTIONS_PASSED++)) || true
   else
@@ -461,13 +473,16 @@ click_button() {
 type_into() {
   local name="$1"
   local text="$2"
-  local ref=$(get_ref "$name")
-  
-  # Fallback to role if name not found
-  [ -z "$ref" ] || [ "$ref" = "null" ] && ref=$(get_ref_by_role "textbox")
-  
+  local ref
+  ref=$(echo "$RESULT" | jq -r "[.nodes[] | select(.name == \"$name\") | .ref] | first // empty")
+
+  # Fallback to textbox role if name not found
+  if [ -z "$ref" ] || [ "$ref" = "null" ]; then
+    ref=$(echo "$RESULT" | jq -r '[.nodes[] | select(.role == "textbox") | .ref] | first // empty')
+  fi
+
   if [ -n "$ref" ] && [ "$ref" != "null" ]; then
-    pt_post /action -d "{\"kind\":\"type\",\"ref\":\"${ref}\",\"text\":\"${text}\"}" > /dev/null
+    pt_post /action "{\"kind\":\"type\",\"ref\":\"${ref}\",\"text\":\"${text}\"}" > /dev/null
     echo -e "  ${GREEN}✓${NC} typed '$text' into '$name' (ref: $ref)"
     ((ASSERTIONS_PASSED++)) || true
   else
@@ -498,14 +513,23 @@ get_tab_id() {
   echo "$RESULT" | jq -r '.tabId'
 }
 
+# Extract tabId from RESULT, assert it's non-null, store in TAB_ID
+# Usage: assert_tab_id "description"
+assert_tab_id() {
+  local desc="${1:-tabId returned}"
+  TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
+  if [ -n "$TAB_ID" ] && [ "$TAB_ID" != "null" ]; then
+    echo -e "  ${GREEN}✓${NC} $desc: ${TAB_ID:0:12}..."
+    ((ASSERTIONS_PASSED++)) || true
+  else
+    echo -e "  ${RED}✗${NC} no tabId in response"
+    ((ASSERTIONS_FAILED++)) || true
+  fi
+}
+
 # Get first tab ID from /tabs response
 get_first_tab() {
   echo "$RESULT" | jq -r '.tabs[0].id'
-}
-
-# Get last tab ID from /tabs response  
-get_last_tab() {
-  echo "$RESULT" | jq -r '.tabs[-1].id'
 }
 
 # Print tab ID (truncated for readability)
@@ -519,7 +543,7 @@ show_tab() {
 assert_tab_count() {
   local expected="$1"
   local actual=$(get_tab_count)
-  
+
   if [ "$actual" -eq "$expected" ]; then
     echo -e "  ${GREEN}✓${NC} tab count = $actual"
     ((ASSERTIONS_PASSED++)) || true
@@ -533,7 +557,7 @@ assert_tab_count() {
 assert_tab_count_gte() {
   local min="$1"
   local actual=$(get_tab_count)
-  
+
   if [ "$actual" -ge "$min" ]; then
     echo -e "  ${GREEN}✓${NC} tab count $actual >= $min"
     ((ASSERTIONS_PASSED++)) || true
@@ -547,12 +571,82 @@ assert_tab_count_gte() {
 assert_tab_closed() {
   local before="$1"
   local actual=$(get_tab_count)
-  
+
   if [ "$actual" -lt "$before" ]; then
     echo -e "  ${GREEN}✓${NC} tab closed (before: $before, after: $actual)"
     ((ASSERTIONS_PASSED++)) || true
   else
     echo -e "  ${RED}✗${NC} tab not closed (before: $before, after: $actual)"
+    ((ASSERTIONS_FAILED++)) || true
+  fi
+}
+
+# ================================================================
+# Ref extraction from snapshot
+# ================================================================
+
+# Find first ref by role from RESULT (curl) or PT_OUT (CLI)
+# Usage: REF=$(find_ref_by_role "button")
+find_ref_by_role() {
+  local role="$1"
+  local json="${2:-$RESULT}"
+  echo "$json" | jq -r "[.nodes[] | select(.role == \"$role\") | .ref] | first // empty"
+}
+
+# Find first ref by name from RESULT or PT_OUT
+# Usage: REF=$(find_ref_by_name "Username:")
+find_ref_by_name() {
+  local name="$1"
+  local json="${2:-$RESULT}"
+  echo "$json" | jq -r "[.nodes[] | select(.name == \"$name\") | .ref] | first // empty"
+}
+
+# Assert ref was found, with readable error
+# Usage: assert_ref_found "$REF" "button ref"
+assert_ref_found() {
+  local ref="$1"
+  local desc="${2:-ref}"
+  if [ -n "$ref" ] && [ "$ref" != "null" ]; then
+    echo -e "  ${GREEN}✓${NC} found $desc: $ref"
+    ((ASSERTIONS_PASSED++)) || true
+    return 0
+  else
+    echo -e "  ${YELLOW}⚠${NC} could not find $desc, skipping"
+    ((ASSERTIONS_PASSED++)) || true
+    return 1
+  fi
+}
+
+# ================================================================
+# Evaluate with polling (for stealth/async injection)
+# ================================================================
+
+# Poll an expression up to N times, assert result equals expected
+# Usage: assert_eval_poll "navigator.webdriver === undefined" "true" "webdriver is undefined" [attempts] [delay]
+assert_eval_poll() {
+  local expr="$1"
+  local expected="$2"
+  local desc="${3:-eval poll}"
+  local attempts="${4:-5}"
+  local delay="${5:-0.4}"
+
+  local ok=false
+  for i in $(seq 1 "$attempts"); do
+    pt_post /evaluate "{\"expression\":\"$expr\"}"
+    local actual
+    actual=$(echo "$RESULT" | jq -r '.result // empty' 2>/dev/null)
+    if [ "$actual" = "$expected" ]; then
+      ok=true
+      break
+    fi
+    sleep "$delay"
+  done
+
+  if [ "$ok" = "true" ]; then
+    echo -e "  ${GREEN}✓${NC} $desc"
+    ((ASSERTIONS_PASSED++)) || true
+  else
+    echo -e "  ${RED}✗${NC} $desc (got: $actual, expected: $expected)"
     ((ASSERTIONS_FAILED++)) || true
   fi
 }
@@ -566,13 +660,13 @@ assert_buttons_page() {
   local snap="$1"
   local expected_buttons=("Increment" "Decrement" "Reset")
   local found=0
-  
+
   for btn in "${expected_buttons[@]}"; do
     if echo "$snap" | jq -e ".nodes[] | select(.name == \"$btn\")" > /dev/null 2>&1; then
       ((found++))
     fi
   done
-  
+
   if [ "$found" -ge 3 ]; then
     echo -e "  ${GREEN}✓${NC} buttons.html: found $found/3 expected buttons"
     ((ASSERTIONS_PASSED++)) || true
@@ -586,17 +680,17 @@ assert_buttons_page() {
 assert_form_page() {
   local snap="$1"
   local checks=0
-  
+
   # Check for textboxes (username, email)
   local textboxes=$(echo "$snap" | jq '[.nodes[] | select(.role == "textbox")] | length')
   [ "$textboxes" -ge 2 ] && ((checks++))
-  
+
   # Check for Submit button
   echo "$snap" | jq -e '.nodes[] | select(.name == "Submit")' > /dev/null 2>&1 && ((checks++))
-  
+
   # Check for combobox (country select)
   echo "$snap" | jq -e '.nodes[] | select(.role == "combobox")' > /dev/null 2>&1 && ((checks++))
-  
+
   if [ "$checks" -ge 3 ]; then
     echo -e "  ${GREEN}✓${NC} form.html: found inputs, submit button, and select"
     ((ASSERTIONS_PASSED++)) || true
@@ -610,11 +704,11 @@ assert_form_page() {
 assert_table_page() {
   local text="$1"
   local checks=0
-  
+
   echo "$text" | grep -q "Alice Johnson" && ((checks++))
   echo "$text" | grep -q "bob@example.com" && ((checks++))
   echo "$text" | grep -q "Active" && ((checks++))
-  
+
   if [ "$checks" -ge 3 ]; then
     echo -e "  ${GREEN}✓${NC} table.html: found expected table data"
     ((ASSERTIONS_PASSED++)) || true
@@ -627,7 +721,7 @@ assert_table_page() {
 # index.html: Welcome header
 assert_index_page() {
   local snap="$1"
-  
+
   if echo "$snap" | jq -e '.title' | grep -q "E2E Test"; then
     echo -e "  ${GREEN}✓${NC} index.html: correct title"
     ((ASSERTIONS_PASSED++)) || true
@@ -641,34 +735,45 @@ assert_index_page() {
 print_summary() {
   local total=$((TESTS_PASSED + TESTS_FAILED))
   local total_time=0
-  
+
   echo ""
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo -e "${BLUE}E2E Test Summary${NC}"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo ""
-  printf "  %-40s %10s %10s\n" "Test" "Duration" "Status"
-  echo "  ────────────────────────────────────────────────────────"
-  
+  # Calculate column width from longest test name (min 40, pad +2)
+  local name_width=40
+  for result in "${TEST_RESULTS[@]}"; do
+    IFS='|' read -r name _ _ <<< "$result"
+    local len=${#name}
+    [ "$len" -gt "$name_width" ] && name_width=$len
+  done
+  ((name_width += 2)) || true
+  local line_width=$((name_width + 24))
+  local separator=$(printf '─%.0s' $(seq 1 $line_width))
+
+  printf "  %-${name_width}s %10s %10s\n" "Test" "Duration" "Status"
+  echo "  ${separator}"
+
   for result in "${TEST_RESULTS[@]}"; do
     IFS='|' read -r name duration status <<< "$result"
     local time_num=${duration%ms}
     ((total_time += time_num)) || true
     if [ "$status" = "passed" ]; then
-      printf "  %-40s %10s ${GREEN}%10s${NC}\n" "$name" "$duration" "✓"
+      printf "  %-${name_width}s %10s ${GREEN}%10s${NC}\n" "$name" "$duration" "✓"
     else
-      printf "  %-40s %10s ${RED}%10s${NC}\n" "$name" "$duration" "✗"
+      printf "  %-${name_width}s %10s ${RED}%10s${NC}\n" "$name" "$duration" "✗"
     fi
   done
-  
-  echo "  ────────────────────────────────────────────────────────"
-  printf "  %-40s %10s\n" "Total" "${total_time}ms"
+
+  echo "  ${separator}"
+  printf "  %-${name_width}s %10s\n" "Total" "${total_time}ms"
   echo ""
   echo -e "  ${GREEN}Passed:${NC} ${TESTS_PASSED}/${total}"
   echo -e "  ${RED}Failed:${NC} ${TESTS_FAILED}/${total}"
   echo ""
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  
+
   # Generate markdown report for CI
   if [ -d "${RESULTS_DIR:-}" ]; then
     generate_markdown_report > "${RESULTS_DIR}/report.md"
@@ -677,7 +782,7 @@ print_summary() {
     echo "total_time=${total_time}ms" >> "${RESULTS_DIR}/summary.txt"
     echo "timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "${RESULTS_DIR}/summary.txt"
   fi
-  
+
   if [ "$TESTS_FAILED" -gt 0 ]; then
     exit 1
   fi
@@ -687,7 +792,7 @@ print_summary() {
 generate_markdown_report() {
   local total=$((TESTS_PASSED + TESTS_FAILED))
   local total_time=0
-  
+
   echo "## 🦀 PinchTab E2E Test Report"
   echo ""
   if [ "$TESTS_FAILED" -eq 0 ]; then
@@ -698,7 +803,7 @@ generate_markdown_report() {
   echo ""
   echo "| Test | Duration | Status |"
   echo "|------|----------|--------|"
-  
+
   for result in "${TEST_RESULTS[@]}"; do
     IFS='|' read -r name duration status <<< "$result"
     local time_num=${duration%ms}
@@ -710,7 +815,7 @@ generate_markdown_report() {
     clean_name="${clean_name#❌ }"
     echo "| ${clean_name} | ${duration} | ${icon} |"
   done
-  
+
   echo ""
   echo "**Summary:** ${TESTS_PASSED}/${total} passed in ${total_time}ms"
   echo ""

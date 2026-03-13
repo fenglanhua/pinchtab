@@ -1197,7 +1197,7 @@ func TestMultiSiteEvaluation(t *testing.T) {
 			cr.total++
 			if pass {
 				cr.pass++
-				t.Logf("PASS query=%q -> %s score=%.3f", tc.query, tc.wantName, result.BestScore)
+				t.Logf("query=%q -> %s score=%.3f", tc.query, tc.wantName, result.BestScore)
 			} else {
 				t.Logf("MISS query=%q wanted=%s (%s) got=%s score=%.3f",
 					tc.query, tc.wantRef, tc.wantName, result.BestRef, result.BestScore)

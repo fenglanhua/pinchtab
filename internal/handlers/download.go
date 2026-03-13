@@ -22,6 +22,10 @@ import (
 	"github.com/pinchtab/pinchtab/internal/web"
 )
 
+var resolveDownloadHostIPs = func(ctx context.Context, network, host string) ([]net.IP, error) {
+	return net.DefaultResolver.LookupIP(ctx, network, host)
+}
+
 // validateDownloadURL blocks file://, internal hosts, private IPs, and cloud metadata.
 // Only public http/https URLs are allowed.
 func validateDownloadURL(rawURL string) error {
@@ -42,7 +46,7 @@ func validateDownloadURL(rawURL string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 
-	ips, err := net.DefaultResolver.LookupIP(ctx, "ip", host)
+	ips, err := resolveDownloadHostIPs(ctx, "ip", host)
 	if err != nil {
 		return fmt.Errorf("could not resolve host")
 	}

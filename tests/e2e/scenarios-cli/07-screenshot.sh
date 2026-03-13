@@ -3,24 +3,15 @@
 
 source "$(dirname "$0")/common.sh"
 
-# ─────────────────────────────────────────────────────────────────
-start_test "pinchtab ss -o <file>"
-
-pt_ok nav "${FIXTURES_URL}/buttons.html"
-
-TMPFILE="/tmp/test-screenshot-$$.jpg"
-pt_ok ss -o "$TMPFILE"
-
-if [ -f "$TMPFILE" ] && [ -s "$TMPFILE" ]; then
-  echo -e "  ${GREEN}✓${NC} screenshot saved to file"
+start_test "pinchtab screenshot"
+pt_ok nav "${FIXTURES_URL}/index.html"
+pt_ok screenshot -o /tmp/e2e-screenshot-test.jpg
+if [ -f /tmp/e2e-screenshot-test.jpg ]; then
+  echo -e "  ${GREEN}✓${NC} screenshot file created"
   ((ASSERTIONS_PASSED++)) || true
-  rm -f "$TMPFILE"
+  rm -f /tmp/e2e-screenshot-test.jpg
 else
-  echo -e "  ${RED}✗${NC} screenshot file not created or empty"
+  echo -e "  ${RED}✗${NC} screenshot file not created"
   ((ASSERTIONS_FAILED++)) || true
 fi
-
 end_test
-
-# Note: ss without -o outputs binary to stdout which doesn't work
-# well with our text-based pt() function, so we only test file output

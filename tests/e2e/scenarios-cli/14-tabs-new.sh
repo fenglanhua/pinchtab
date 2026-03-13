@@ -4,9 +4,9 @@
 source "$(dirname "$0")/common.sh"
 
 # ─────────────────────────────────────────────────────────────────
-start_test "pinchtab tabs new <url>"
+start_test "pinchtab tab new <url>"
 
-pt_ok tabs new "${FIXTURES_URL}/buttons.html"
+pt_ok tab new "${FIXTURES_URL}/buttons.html"
 assert_output_json
 assert_output_contains "tabId" "returns new tab ID"
 
@@ -14,7 +14,7 @@ assert_output_contains "tabId" "returns new tab ID"
 NEW_TAB_ID=$(echo "$PT_OUT" | jq -r '.tabId')
 
 # Verify it appears in tabs list
-pt_ok tabs
+pt_ok tab
 assert_output_contains "$NEW_TAB_ID" "new tab appears in list"
 
 # Cleanup

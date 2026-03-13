@@ -1,27 +1,22 @@
 package bridge
 
 import (
-	"runtime"
+	"slices"
 	"testing"
+
+	"github.com/pinchtab/pinchtab/internal/config"
 )
 
-func TestFindChromeBinary_ARM64Prioritization(t *testing.T) {
-	// Verifies function doesn't panic across architectures (ARM64 vs x86_64)
-	// Chrome may not be installed in CI, so empty result is valid
-	result := findChromeBinary()
+func TestBuildChromeArgsSuppressesCrashDialogs(t *testing.T) {
+	args := buildChromeArgs(&config.RuntimeConfig{}, 9222)
 
-	if result != "" {
-		t.Logf("Found Chrome binary: %s (arch: %s)", result, runtime.GOARCH)
-	} else {
-		t.Logf("No Chrome binary found (expected in CI, arch: %s)", runtime.GOARCH)
-	}
-}
-
-func TestFindChromeBinary_NoPathTraversal(t *testing.T) {
-	// Ensures only absolute paths are returned (security check)
-	result := findChromeBinary()
-
-	if result != "" && result[0] != '/' && result[1] != ':' {
-		t.Errorf("findChromeBinary returned non-absolute path: %s", result)
+	for _, want := range []string{
+		"--disable-session-crashed-bubble",
+		"--hide-crash-restore-bubble",
+		"--noerrdialogs",
+	} {
+		if !slices.Contains(args, want) {
+			t.Fatalf("missing chrome arg %q in %v", want, args)
+		}
 	}
 }

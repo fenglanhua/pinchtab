@@ -231,7 +231,7 @@ const fallbackHTML = `<!DOCTYPE html>
 <style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#0a0a0a;color:#e0e0e0}.c{text-align:center;max-width:480px;padding:2rem}h1{font-size:1.5rem;margin-bottom:.5rem}p{color:#888;line-height:1.6}code{background:#1a1a2e;padding:2px 8px;border-radius:4px;font-size:.9em}</style>
 </head><body><div class="c"><h1>🦀 Dashboard not built</h1>
 <p>The React dashboard needs to be compiled before use.<br/>
-Run <code>./pdev build</code> or <code>./scripts/build-dashboard.sh</code> then rebuild the Go binary.</p>
+Run <code>./dev build</code> or <code>./scripts/build-dashboard.sh</code> then rebuild the Go binary.</p>
 </div></body></html>`
 
 func (d *Dashboard) handleDashboardUI(w http.ResponseWriter, r *http.Request) {

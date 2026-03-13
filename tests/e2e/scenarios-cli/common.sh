@@ -21,6 +21,27 @@ TESTS_FAILED="${TESTS_FAILED:-0}"
 ASSERTIONS_PASSED="${ASSERTIONS_PASSED:-0}"
 ASSERTIONS_FAILED="${ASSERTIONS_FAILED:-0}"
 CURRENT_TEST="${CURRENT_TEST:-}"
+MUTED='\033[0;90m'
+
+# Test timing
+TEST_START_TIME="${TEST_START_TIME:-0}"
+if [ -z "${TEST_RESULTS_INIT:-}" ]; then
+  TEST_RESULTS=()
+  TEST_RESULTS_INIT=1
+fi
+
+# Get time in milliseconds (cross-platform)
+get_time_ms() {
+  if [ -f /proc/uptime ]; then
+    awk '{printf "%.0f", $1 * 1000}' /proc/uptime
+  elif command -v gdate &>/dev/null; then
+    gdate +%s%3N
+  elif command -v perl &>/dev/null; then
+    perl -MTime::HiRes=time -e 'printf "%.0f", time * 1000'
+  else
+    echo $(($(date +%s) * 1000))
+  fi
+}
 
 # ─────────────────────────────────────────────────────────────────
 # Wait for instance ready (same as curl-based tests)
@@ -57,20 +78,25 @@ wait_for_instance_ready() {
 
 start_test() {
   CURRENT_TEST="$1"
+  TEST_START_TIME=$(get_time_ms)
   echo -e "${BLUE}▶ ${CURRENT_TEST}${NC}"
 }
 
 end_test() {
+  local end_time=$(get_time_ms)
+  local duration=$((end_time - TEST_START_TIME))
+
   if [ "$ASSERTIONS_FAILED" -gt 0 ]; then
-    echo -e "${RED}✗ ${CURRENT_TEST} failed${NC}"
+    echo -e "${RED}✗ ${CURRENT_TEST} failed${NC} ${MUTED}(${duration}ms)${NC}\n"
+    TEST_RESULTS+=("❌ ${CURRENT_TEST}|${duration}ms|failed")
     ((TESTS_FAILED++)) || true
   else
-    echo -e "${GREEN}✓ ${CURRENT_TEST}${NC}"
+    echo -e "${GREEN}✓ ${CURRENT_TEST} passed${NC} ${MUTED}(${duration}ms)${NC}\n"
+    TEST_RESULTS+=("✅ ${CURRENT_TEST}|${duration}ms|passed")
     ((TESTS_PASSED++)) || true
   fi
   ASSERTIONS_FAILED=0
   ASSERTIONS_PASSED=0
-  echo ""
 }
 
 # ─────────────────────────────────────────────────────────────────
@@ -83,18 +109,18 @@ end_test() {
 pt() {
   local tmpout=$(mktemp)
   local tmperr=$(mktemp)
-  
+
   echo -e "  ${BLUE}→ PINCHTAB_URL=$PINCHTAB_URL pinchtab $@${NC}"
-  
+
   set +e
   PINCHTAB_URL="$PINCHTAB_URL" pinchtab "$@" > "$tmpout" 2> "$tmperr"
   PT_CODE=$?
   set -e
-  
+
   PT_OUT=$(cat "$tmpout")
   PT_ERR=$(cat "$tmperr")
   rm -f "$tmpout" "$tmperr"
-  
+
   if [ -n "$PT_OUT" ]; then
     echo "$PT_OUT" | head -5
   fi
@@ -135,7 +161,7 @@ pt_fail() {
 assert_output_contains() {
   local expected="$1"
   local desc="${2:-output contains '$expected'}"
-  
+
   if echo "$PT_OUT" | grep -q "$expected"; then
     echo -e "  ${GREEN}✓${NC} $desc"
     ((ASSERTIONS_PASSED++)) || true
@@ -146,11 +172,95 @@ assert_output_contains() {
   fi
 }
 
+# Assert exit code equals expected (use after pt, not pt_ok/pt_fail)
+# Usage: assert_exit_code 2 "unknown subcommand"
+assert_exit_code() {
+  local expected="$1"
+  local desc="${2:-exit code is $expected}"
+  if [ "$PT_CODE" -eq "$expected" ]; then
+    echo -e "  ${GREEN}✓${NC} $desc (exit $PT_CODE)"
+    ((ASSERTIONS_PASSED++)) || true
+  else
+    echo -e "  ${RED}✗${NC} $desc (expected $expected, got $PT_CODE)"
+    ((ASSERTIONS_FAILED++)) || true
+  fi
+}
+
+# Assert exit code is in range [0, max]
+# Usage: assert_exit_code_lte 1 "graceful exit"
+assert_exit_code_lte() {
+  local max="$1"
+  local desc="${2:-exit code <= $max}"
+  if [ "$PT_CODE" -le "$max" ]; then
+    echo -e "  ${GREEN}✓${NC} $desc (exit $PT_CODE)"
+    ((ASSERTIONS_PASSED++)) || true
+  else
+    echo -e "  ${RED}✗${NC} $desc (got $PT_CODE)"
+    ((ASSERTIONS_FAILED++)) || true
+  fi
+}
+
+# Assert PT_OUT JSON field contains substring
+assert_json_field_contains() {
+  local path="$1"
+  local needle="$2"
+  local desc="${3:-$path contains '$needle'}"
+  local actual
+  actual=$(echo "$PT_OUT" | jq -r "$path" 2>/dev/null)
+  if [[ "$actual" == *"$needle"* ]]; then
+    echo -e "  ${GREEN}✓${NC} $desc"
+    ((ASSERTIONS_PASSED++)) || true
+  else
+    echo -e "  ${RED}✗${NC} $desc (got '$actual')"
+    ((ASSERTIONS_FAILED++)) || true
+  fi
+}
+
+# Find ref by role/name from PT_OUT snapshot (CLI equivalent of curl helpers)
+find_ref_by_role() {
+  local role="$1"
+  local json="${2:-$PT_OUT}"
+  echo "$json" | jq -r "[.nodes[] | select(.role == \"$role\") | .ref] | first // empty"
+}
+
+find_ref_by_name() {
+  local name="$1"
+  local json="${2:-$PT_OUT}"
+  echo "$json" | jq -r "[.nodes[] | select(.name == \"$name\") | .ref] | first // empty"
+}
+
+assert_ref_found() {
+  local ref="$1"
+  local desc="${2:-ref}"
+  if [ -n "$ref" ] && [ "$ref" != "null" ]; then
+    echo -e "  ${GREEN}✓${NC} found $desc: $ref"
+    ((ASSERTIONS_PASSED++)) || true
+    return 0
+  else
+    echo -e "  ${YELLOW}⚠${NC} could not find $desc, skipping"
+    ((ASSERTIONS_PASSED++)) || true
+    return 1
+  fi
+}
+
+# Assert file exists
+assert_file_exists() {
+  local path="$1"
+  local desc="${2:-file exists: $path}"
+  if [ -f "$path" ]; then
+    echo -e "  ${GREEN}✓${NC} $desc"
+    ((ASSERTIONS_PASSED++)) || true
+  else
+    echo -e "  ${RED}✗${NC} $desc (not found)"
+    ((ASSERTIONS_FAILED++)) || true
+  fi
+}
+
 # Assert PT_OUT does not contain string
 assert_output_not_contains() {
   local forbidden="$1"
   local desc="${2:-output does not contain '$forbidden'}"
-  
+
   if echo "$PT_OUT" | grep -q "$forbidden"; then
     echo -e "  ${RED}✗${NC} $desc"
     echo -e "  ${RED}  output was: $PT_OUT${NC}"
@@ -164,7 +274,7 @@ assert_output_not_contains() {
 # Assert PT_OUT is valid JSON
 assert_output_json() {
   local desc="${1:-output is valid JSON}"
-  
+
   if echo "$PT_OUT" | jq . > /dev/null 2>&1; then
     echo -e "  ${GREEN}✓${NC} $desc"
     ((ASSERTIONS_PASSED++)) || true
@@ -180,10 +290,10 @@ assert_json_field() {
   local path="$1"
   local expected="$2"
   local desc="${3:-$path equals '$expected'}"
-  
+
   local actual
   actual=$(echo "$PT_OUT" | jq -r "$path" 2>/dev/null)
-  
+
   if [ "$actual" = "$expected" ]; then
     echo -e "  ${GREEN}✓${NC} $desc"
     ((ASSERTIONS_PASSED++)) || true
@@ -198,24 +308,56 @@ assert_json_field() {
 # ─────────────────────────────────────────────────────────────────
 
 print_summary() {
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo ""
   local total=$((TESTS_PASSED + TESTS_FAILED))
-  if [ "$TESTS_FAILED" -eq 0 ]; then
-    echo -e "  ${GREEN}All $total CLI tests passed!${NC}"
-  else
-    echo -e "  ${GREEN}Passed:${NC} $TESTS_PASSED/$total"
-    echo -e "  ${RED}Failed:${NC} $TESTS_FAILED/$total"
-  fi
+  local total_time=0
+
+  # Calculate column width from longest test name (min 40, pad +2)
+  local name_width=40
+  for result in "${TEST_RESULTS[@]}"; do
+    IFS='|' read -r name _ _ <<< "$result"
+    local len=${#name}
+    [ "$len" -gt "$name_width" ] && name_width=$len
+  done
+  ((name_width += 2)) || true
+  local line_width=$((name_width + 24))
+  local separator=$(printf '─%.0s' $(seq 1 $line_width))
+
   echo ""
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  
+  echo -e "${BLUE}CLI E2E Test Summary${NC}"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
+  printf "  %-${name_width}s %10s %10s\n" "Test" "Duration" "Status"
+  echo "  ${separator}"
+
+  for result in "${TEST_RESULTS[@]}"; do
+    IFS='|' read -r name duration status <<< "$result"
+    local time_num=${duration%ms}
+    ((total_time += time_num)) || true
+    if [ "$status" = "passed" ]; then
+      printf "  %-${name_width}s %10s ${GREEN}%10s${NC}\n" "$name" "$duration" "✓"
+    else
+      printf "  %-${name_width}s %10s ${RED}%10s${NC}\n" "$name" "$duration" "✗"
+    fi
+  done
+
+  echo "  ${separator}"
+  printf "  %-${name_width}s %10s\n" "Total" "${total_time}ms"
+  echo ""
+  echo -e "  ${GREEN}Passed:${NC} ${TESTS_PASSED}/${total}"
+  echo -e "  ${RED}Failed:${NC} ${TESTS_FAILED}/${total}"
+  echo ""
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
   # Save results
   if [ -d "${RESULTS_DIR:-}" ]; then
     echo "passed=$TESTS_PASSED" > "${RESULTS_DIR}/summary.txt"
     echo "failed=$TESTS_FAILED" >> "${RESULTS_DIR}/summary.txt"
+    echo "total_time=${total_time}ms" >> "${RESULTS_DIR}/summary.txt"
+    echo "timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "${RESULTS_DIR}/summary.txt"
   fi
-  
-  # Exit with failure if any tests failed
-  [ "$TESTS_FAILED" -eq 0 ]
+
+  if [ "$TESTS_FAILED" -gt 0 ]; then
+    exit 1
+  fi
 }

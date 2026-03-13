@@ -6,7 +6,23 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/mcp"
+	"github.com/spf13/cobra"
 )
+
+var mcpCmd = &cobra.Command{
+	Use:   "mcp",
+	Short: "Start the MCP stdio server",
+	Long:  "Start the Model Context Protocol stdio server and proxy browser actions to a running PinchTab instance.",
+	Run: func(cmd *cobra.Command, args []string) {
+		cfg := config.Load()
+		runMCP(cfg)
+	},
+}
+
+func init() {
+	mcpCmd.GroupID = "primary"
+	rootCmd.AddCommand(mcpCmd)
+}
 
 func runMCP(cfg *config.RuntimeConfig) {
 	baseURL := os.Getenv("PINCHTAB_URL")

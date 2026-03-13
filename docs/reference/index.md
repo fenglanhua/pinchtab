@@ -4,6 +4,7 @@ Reference pages for the current PinchTab CLI and closely related command-facing 
 
 Note: this index is generated and should be checked against the code when commands change.
 
+- [CLI Overview](./cli.md)
 - [Click](./click.md)
 - [Config](./config.md)
 - [Eval](./eval.md)

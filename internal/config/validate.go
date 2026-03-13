@@ -250,17 +250,14 @@ func isValidAttachScheme(scheme string) bool {
 	}
 }
 
-// ValidStealthLevels returns all valid stealth level values.
 func ValidStealthLevels() []string {
 	return []string{"light", "medium", "full"}
 }
 
-// ValidEvictionPolicies returns all valid tab eviction policy values.
 func ValidEvictionPolicies() []string {
 	return []string{"reject", "close_oldest", "close_lru"}
 }
 
-// ValidStrategies returns all valid strategy values.
 func ValidStrategies() []string {
 	return []string{"simple", "explicit", "simple-autorestart", "always-on"}
 }

@@ -7,7 +7,7 @@ End-to-end tests for PinchTab that exercise the full stack including browser aut
 ### With Docker (recommended)
 
 ```bash
-./pdev e2e
+./dev e2e
 ```
 
 Or directly:
