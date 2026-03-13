@@ -15,6 +15,7 @@ import {
   AUTH_REQUIRED_EVENT,
   clearStoredAuthToken,
   getStoredAuthToken,
+  setStoredAuthToken,
 } from "./services/auth";
 
 type AuthMode = "probing" | "required" | "open" | "unreachable";
@@ -32,6 +33,19 @@ function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
   const memoryMetricsEnabled = settings.monitoring?.memoryMetrics ?? false;
+  // Auto-login from ?token= query parameter (e.g. from wizard URL)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlToken = params.get("token");
+    if (urlToken) {
+      setStoredAuthToken(urlToken);
+      const clean = new URL(window.location.href);
+      clean.searchParams.delete("token");
+      window.history.replaceState({}, "", clean.pathname + clean.hash);
+      window.location.reload();
+    }
+  }, []);
+
   const authToken = getStoredAuthToken();
   const hasStoredToken = authToken !== "";
   const [authMode, setAuthMode] = useState<AuthMode>(

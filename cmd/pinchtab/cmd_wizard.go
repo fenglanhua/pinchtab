@@ -110,7 +110,7 @@ func runFullWizard(cfg *config.FileConfig, configPath string) bool {
 	fmt.Println()
 	fmt.Println(cli.StyleStdout(cli.HeadingStyle, "Dashboard"))
 	fmt.Println()
-	loginURL := dashboardURL(cfg, "/login")
+	loginURL := dashboardURL(cfg, "")
 	fmt.Println(cli.StyleStdout(cli.CommandStyle, loginURL))
 	if err := copyToClipboard(loginURL); err == nil {
 		fmt.Println(cli.StyleStdout(cli.MutedStyle, "Copied to clipboard"))
