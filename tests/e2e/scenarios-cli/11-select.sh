@@ -8,9 +8,8 @@ start_test "pinchtab select <ref> <value>"
 
 pt_ok nav "${FIXTURES_URL}/form.html"
 
-# Get snapshot to find the country select ref
-pt_ok snap --interactive
-# Find combobox ref (the country dropdown)
+# Get snapshot to find the select ref
+pt_ok snap
 SELECT_REF=$(echo "$PT_OUT" | jq -r '.nodes[] | select(.role == "combobox") | .ref' | head -1)
 
 if [ -n "$SELECT_REF" ] && [ "$SELECT_REF" != "null" ]; then
