@@ -11,14 +11,7 @@ assert_ok "single redirect followed"
 
 # Verify we ended up at final destination
 pt_get /snapshot
-FINAL_URL=$(echo "$RESULT" | jq -r '.url // empty')
-if echo "$FINAL_URL" | grep -q "httpbin.org/get"; then
-  echo -e "  ${GREEN}✓${NC} final URL is /get (redirect successful)"
-  ((ASSERTIONS_PASSED++)) || true
-else
-  echo -e "  ${YELLOW}~${NC} redirect may have been followed (URL: $FINAL_URL)"
-  ((ASSERTIONS_PASSED++)) || true
-fi
+assert_json_contains "$RESULT" ".url" "httpbin.org/get" "final URL is /get (redirect successful)"
 
 end_test
 
@@ -31,14 +24,7 @@ assert_ok "five redirects followed"
 
 # Verify final destination
 pt_get /snapshot
-FINAL_URL=$(echo "$RESULT" | jq -r '.url // empty')
-if echo "$FINAL_URL" | grep -q "httpbin.org/get"; then
-  echo -e "  ${GREEN}✓${NC} multiple redirects followed to destination"
-  ((ASSERTIONS_PASSED++)) || true
-else
-  echo -e "  ${YELLOW}~${NC} final URL: $FINAL_URL"
-  ((ASSERTIONS_PASSED++)) || true
-fi
+assert_json_contains "$RESULT" ".url" "httpbin.org/get" "multiple redirects followed to destination"
 
 end_test
 

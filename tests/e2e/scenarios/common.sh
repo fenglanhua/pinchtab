@@ -568,6 +568,40 @@ assert_tab_closed() {
 }
 
 # ================================================================
+# Evaluate with polling (for stealth/async injection)
+# ================================================================
+
+# Poll an expression up to N times, assert result equals expected
+# Usage: assert_eval_poll "navigator.webdriver === undefined" "true" "webdriver is undefined" [attempts] [delay]
+assert_eval_poll() {
+  local expr="$1"
+  local expected="$2"
+  local desc="${3:-eval poll}"
+  local attempts="${4:-5}"
+  local delay="${5:-0.4}"
+
+  local ok=false
+  for i in $(seq 1 "$attempts"); do
+    pt_post /evaluate "{\"expression\":\"$expr\"}"
+    local actual
+    actual=$(echo "$RESULT" | jq -r '.result // empty' 2>/dev/null)
+    if [ "$actual" = "$expected" ]; then
+      ok=true
+      break
+    fi
+    sleep "$delay"
+  done
+
+  if [ "$ok" = "true" ]; then
+    echo -e "  ${GREEN}✓${NC} $desc"
+    ((ASSERTIONS_PASSED++)) || true
+  else
+    echo -e "  ${RED}✗${NC} $desc (got: $actual, expected: $expected)"
+    ((ASSERTIONS_FAILED++)) || true
+  fi
+}
+
+# ================================================================
 # Page-specific assertions (we control the fixtures!)
 # ================================================================
 

@@ -12,67 +12,21 @@ sleep 1
 # ─────────────────────────────────────────────────────────────────
 start_test "stealth: webdriver is undefined"
 
-# Poll for stealth injection (up to 2s)
-STEALTH_OK=false
-for i in $(seq 1 5); do
-  pt_post /evaluate '{"expression":"navigator.webdriver === undefined"}'
-  if echo "$RESULT" | jq -r '.result' 2>/dev/null | grep -q "true"; then
-    STEALTH_OK=true
-    break
-  fi
-  sleep 0.4
-done
-if [ "$STEALTH_OK" = "true" ]; then
-  echo -e "  ${GREEN}✓${NC} navigator.webdriver is undefined"
-  ((ASSERTIONS_PASSED++)) || true
-else
-  echo -e "  ${RED}✗${NC} navigator.webdriver still defined"
-  ((ASSERTIONS_FAILED++)) || true
-fi
+assert_eval_poll "navigator.webdriver === undefined" "true" "navigator.webdriver is undefined"
 
 end_test
 
 # ─────────────────────────────────────────────────────────────────
 start_test "stealth: plugins present"
 
-STEALTH_OK=false
-for i in $(seq 1 5); do
-  pt_post /evaluate '{"expression":"navigator.plugins.length > 0"}'
-  if echo "$RESULT" | jq -r '.result' 2>/dev/null | grep -q "true"; then
-    STEALTH_OK=true
-    break
-  fi
-  sleep 0.4
-done
-if [ "$STEALTH_OK" = "true" ]; then
-  echo -e "  ${GREEN}✓${NC} navigator.plugins spoofed"
-  ((ASSERTIONS_PASSED++)) || true
-else
-  echo -e "  ${RED}✗${NC} navigator.plugins empty"
-  ((ASSERTIONS_FAILED++)) || true
-fi
+assert_eval_poll "navigator.plugins.length > 0" "true" "navigator.plugins spoofed"
 
 end_test
 
 # ─────────────────────────────────────────────────────────────────
 start_test "stealth: chrome.runtime present"
 
-STEALTH_OK=false
-for i in $(seq 1 5); do
-  pt_post /evaluate '{"expression":"!!window.chrome && !!window.chrome.runtime"}'
-  if echo "$RESULT" | jq -r '.result' 2>/dev/null | grep -q "true"; then
-    STEALTH_OK=true
-    break
-  fi
-  sleep 0.4
-done
-if [ "$STEALTH_OK" = "true" ]; then
-  echo -e "  ${GREEN}✓${NC} window.chrome.runtime present"
-  ((ASSERTIONS_PASSED++)) || true
-else
-  echo -e "  ${RED}✗${NC} window.chrome.runtime missing"
-  ((ASSERTIONS_FAILED++)) || true
-fi
+assert_eval_poll "!!window.chrome && !!window.chrome.runtime" "true" "window.chrome.runtime present"
 
 end_test
 
@@ -92,7 +46,6 @@ assert_ok "fingerprint rotate (random)"
 
 end_test
 
-# ─────────────────────────────────────────────────────────────────
 # ─────────────────────────────────────────────────────────────────
 start_test "stealth: fingerprint rotate (specific tab)"
 
