@@ -50,6 +50,8 @@ services:
     environment:
       PINCHTAB_CONFIG: /config/pinchtab-lite.json
       PINCHTAB_PORT: "9999"
+    volumes:
+      - ./config/pinchtab-lite.json:/config/pinchtab-lite.json:ro
     ports:
       - "9997:9999"
     command: ["/usr/local/bin/pinchtab", "bridge"]
