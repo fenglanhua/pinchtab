@@ -59,8 +59,8 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if cfg.AllowEvaluate {
 		t.Errorf("default AllowEvaluate = %v, want false", cfg.AllowEvaluate)
 	}
-	if cfg.Strategy != "simple" {
-		t.Errorf("default Strategy = %v, want simple", cfg.Strategy)
+	if cfg.Strategy != "always-on" {
+		t.Errorf("default Strategy = %v, want always-on", cfg.Strategy)
 	}
 	if cfg.AllocationPolicy != "fcfs" {
 		t.Errorf("default AllocationPolicy = %v, want fcfs", cfg.AllocationPolicy)

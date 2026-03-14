@@ -68,7 +68,7 @@ func DefaultFileConfig() FileConfig {
 			DefaultProfile: "default",
 		},
 		MultiInstance: MultiInstanceConfig{
-			Strategy:          "simple",
+			Strategy:          "always-on",
 			AllocationPolicy:  "fcfs",
 			InstancePortStart: &start,
 			InstancePortEnd:   &end,

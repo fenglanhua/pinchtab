@@ -56,7 +56,7 @@ func Load() *RuntimeConfig {
 		WaitNavDelay:    1 * time.Second,
 
 		// Orchestrator defaults
-		Strategy:           "simple",
+		Strategy:           "always-on",
 		AllocationPolicy:   "fcfs",
 		RestartMaxRestarts: 20,
 		RestartInitBackoff: 2 * time.Second,
