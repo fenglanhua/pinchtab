@@ -87,7 +87,7 @@ func AuthMiddlewareWithSessions(cfg *config.RuntimeConfig, sessions *authn.Sessi
 				return
 			}
 		case authn.MethodCookie:
-			if !cookieOriginAllowed(r) {
+			if !cookieOriginAllowed(r, cfg.TrustProxyHeaders) {
 				httpx.ErrorCode(w, http.StatusForbidden, "origin_forbidden", "same-origin browser request required for session authentication", false, map[string]any{
 					"sameOriginRequired": true,
 				})
@@ -164,6 +164,8 @@ func cookieAuthAllowed(r *http.Request) bool {
 		switch {
 		case path == "/api/auth/elevate":
 			return true
+		case path == "/action":
+			return true
 		case path == "/instances/launch":
 			return true
 		case strings.HasPrefix(path, "/instances/") && strings.HasSuffix(path, "/stop"):
@@ -224,31 +226,32 @@ func corsAllowedOrigin(cfg *config.RuntimeConfig, r *http.Request) string {
 	if strings.TrimSpace(cfg.Token) == "" {
 		return "*"
 	}
-	if sameOriginRequest(origin, r) {
+	if sameOriginRequest(origin, r, cfg.TrustProxyHeaders) {
 		return origin
 	}
 	return ""
 }
 
-func sameOriginRequest(origin string, r *http.Request) bool {
+func sameOriginRequest(origin string, r *http.Request, trustProxy ...bool) bool {
 	parsed, err := url.Parse(origin)
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
 		return false
 	}
-	return strings.EqualFold(parsed.Scheme, requestScheme(r)) && strings.EqualFold(parsed.Host, requestHost(r))
+	trust := len(trustProxy) > 0 && trustProxy[0]
+	return strings.EqualFold(parsed.Scheme, requestScheme(r, trust)) && strings.EqualFold(parsed.Host, requestHost(r, trust))
 }
 
-func cookieOriginAllowed(r *http.Request) bool {
+func cookieOriginAllowed(r *http.Request, trustProxy bool) bool {
 	if isWebSocketUpgrade(r) {
 		origin := strings.TrimSpace(r.Header.Get("Origin"))
-		return origin != "" && sameOriginRequest(origin, r)
+		return origin != "" && sameOriginRequest(origin, r, trustProxy)
 	}
 
 	if origin := strings.TrimSpace(r.Header.Get("Origin")); origin != "" {
-		return sameOriginRequest(origin, r)
+		return sameOriginRequest(origin, r, trustProxy)
 	}
 	if referer := strings.TrimSpace(r.Header.Get("Referer")); referer != "" {
-		return sameOriginRequest(referer, r)
+		return sameOriginRequest(referer, r, trustProxy)
 	}
 	return false
 }
@@ -263,16 +266,47 @@ func isWebSocketUpgrade(r *http.Request) bool {
 	return strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade")
 }
 
-func requestScheme(r *http.Request) string {
-	if r != nil && r.TLS != nil {
+func requestScheme(r *http.Request, trustProxy bool) string {
+	if r == nil {
+		return "http"
+	}
+	if trustProxy {
+		if forwarded := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")); forwarded != "" {
+			return strings.ToLower(strings.TrimSpace(strings.Split(forwarded, ",")[0]))
+		}
+		if forwarded := strings.TrimSpace(r.Header.Get("Forwarded")); forwarded != "" {
+			for _, part := range strings.Split(forwarded, ";") {
+				key, value, ok := strings.Cut(strings.TrimSpace(part), "=")
+				if !ok || !strings.EqualFold(key, "proto") {
+					continue
+				}
+				return strings.ToLower(strings.Trim(value, `"`))
+			}
+		}
+	}
+	if r.TLS != nil {
 		return "https"
 	}
 	return "http"
 }
 
-func requestHost(r *http.Request) string {
+func requestHost(r *http.Request, trustProxy bool) string {
 	if r == nil {
 		return ""
+	}
+	if trustProxy {
+		if forwarded := strings.TrimSpace(r.Header.Get("X-Forwarded-Host")); forwarded != "" {
+			return strings.TrimSpace(strings.Split(forwarded, ",")[0])
+		}
+		if forwarded := strings.TrimSpace(r.Header.Get("Forwarded")); forwarded != "" {
+			for _, part := range strings.Split(forwarded, ";") {
+				key, value, ok := strings.Cut(strings.TrimSpace(part), "=")
+				if !ok || !strings.EqualFold(key, "host") {
+					continue
+				}
+				return strings.Trim(value, `"`)
+			}
+		}
 	}
 	return strings.TrimSpace(r.Host)
 }
