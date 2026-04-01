@@ -1,7 +1,10 @@
 package activity
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -267,4 +270,47 @@ func initialURL(r *http.Request) string {
 		return sanitizeActivityURL(u)
 	}
 	return ""
+}
+
+// EnrichRouteActivity peeks at the request body for action and navigate
+// requests to extract kind, ref, and url for the activity stream. The body
+// is restored for the downstream proxy handler.
+func EnrichRouteActivity(r *http.Request) {
+	if r == nil || r.Body == nil || r.Method != http.MethodPost {
+		return
+	}
+	path := r.URL.Path
+	isAction := path == "/action" || strings.HasSuffix(path, "/action")
+	isNavigate := path == "/navigate" || strings.HasSuffix(path, "/navigate")
+	if !isAction && !isNavigate {
+		return
+	}
+
+	body, err := io.ReadAll(io.LimitReader(r.Body, 8<<10))
+	if err != nil || len(body) == 0 {
+		return
+	}
+	r.Body = io.NopCloser(bytes.NewReader(body))
+
+	var peek struct {
+		Kind string `json:"kind"`
+		Ref  string `json:"ref"`
+		URL  string `json:"url"`
+	}
+	if json.Unmarshal(body, &peek) != nil {
+		return
+	}
+
+	update := Update{}
+	if isAction && peek.Kind != "" {
+		update.Action = peek.Kind
+		update.Ref = peek.Ref
+	}
+	if isNavigate && peek.URL != "" {
+		update.Action = "navigate"
+		update.URL = peek.URL
+	}
+	if update.Action != "" {
+		EnrichRequest(r, update)
+	}
 }

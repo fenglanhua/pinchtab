@@ -10,6 +10,7 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/httpx"
 	"github.com/pinchtab/pinchtab/internal/orchestrator"
+	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/strategy"
 )
 
@@ -45,6 +46,7 @@ func (s *Strategy) proxyToFirst(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, 503, fmt.Errorf("no remote instances connected — attach a bridge first"))
 		return
 	}
+	activity.EnrichRouteActivity(r)
 	strategy.EnrichForTarget(r, s.orch, target)
 	s.orch.ProxyToTarget(w, r, target+r.URL.Path)
 }
