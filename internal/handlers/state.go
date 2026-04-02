@@ -67,9 +67,9 @@ func (h *Handlers) HandleStateShow(w http.ResponseWriter, r *http.Request) {
 }
 
 type stateSaveRequest struct {
-	Name     string `json:"name"`
-	Encrypt  bool   `json:"encrypt"`
-	TabID    string `json:"tabId"`
+	Name     string                 `json:"name"`
+	Encrypt  bool                   `json:"encrypt"`
+	TabID    string                 `json:"tabId"`
 	Metadata map[string]interface{} `json:"metadata"`
 }
 
