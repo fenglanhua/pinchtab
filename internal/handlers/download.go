@@ -1,10 +1,13 @@
 package handlers
 
 import (
+	"compress/gzip"
 	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -415,6 +418,23 @@ func (h *Handlers) HandleDownload(w http.ResponseWriter, r *http.Request) {
 		if writeDownloadGuardError(w, requestGuard.BlockedError(), maxDownloadBytes) {
 			return
 		}
+		// Chrome aborts navigation for binary downloads (.gz, etc.).
+		// Fall back to a direct Go HTTP fetch using the browser's cookies.
+		if isNavigationAborted(err) {
+			slog.Info("download: Chrome navigation aborted, falling back to direct fetch", "url", dlURL)
+			body, mime, status, fetchErr := h.fetchDirectWithCookies(tCtx, browserCtx, dlURL, maxDownloadBytes)
+			if fetchErr != nil {
+				httpx.Error(w, 502, fmt.Errorf("download fallback: %w", fetchErr))
+				return
+			}
+			if status >= 400 {
+				httpx.Error(w, 502, fmt.Errorf("remote server returned HTTP %d", status))
+				return
+			}
+			responseMIME = mime
+			h.writeDownloadResponse(w, body, responseMIME, dlURL, output, filePath, raw, maxDownloadBytes)
+			return
+		}
 		httpx.Error(w, 502, fmt.Errorf("navigate to download URL: %w", err))
 		return
 	}
@@ -458,19 +478,22 @@ func (h *Handlers) HandleDownload(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, 500, fmt.Errorf("get response body: %w", err))
 		return
 	}
-	if len(body) > maxDownloadBytes {
+	h.writeDownloadResponse(w, body, responseMIME, dlURL, output, filePath, raw, maxDownloadBytes)
+}
+
+func (h *Handlers) writeDownloadResponse(w http.ResponseWriter, body []byte, mime, dlURL, output, filePath string, raw bool, maxBytes int) {
+	if len(body) > maxBytes {
 		httpx.ErrorCode(w, http.StatusRequestEntityTooLarge, "download_too_large",
-			downloadTooLargeError(int64(len(body)), maxDownloadBytes).Error(), false, map[string]any{
-				"maxBytes": maxDownloadBytes,
+			downloadTooLargeError(int64(len(body)), maxBytes).Error(), false, map[string]any{
+				"maxBytes": maxBytes,
 			})
 		return
 	}
 
-	if responseMIME == "" {
-		responseMIME = "application/octet-stream"
+	if mime == "" {
+		mime = "application/octet-stream"
 	}
 
-	// Write to file.
 	if output == "file" {
 		if filePath == "" {
 			httpx.Error(w, 400, fmt.Errorf("path required when output=file"))
@@ -500,27 +523,148 @@ func (h *Handlers) HandleDownload(w http.ResponseWriter, r *http.Request) {
 			"status":      "saved",
 			"path":        filePath,
 			"size":        len(body),
-			"contentType": responseMIME,
+			"contentType": mime,
 		})
 		return
 	}
 
-	// Raw bytes.
 	if raw {
-		w.Header().Set("Content-Type", responseMIME)
+		w.Header().Set("Content-Type", mime)
 		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(body)))
 		w.WriteHeader(200)
 		_, _ = w.Write(body)
 		return
 	}
 
-	// Default: base64 JSON response.
 	httpx.JSON(w, 200, map[string]any{
 		"data":        base64.StdEncoding.EncodeToString(body),
-		"contentType": responseMIME,
+		"contentType": mime,
 		"size":        len(body),
 		"url":         dlURL,
 	})
+}
+
+// fetchDirectWithCookies performs a Go HTTP fetch using cookies extracted from
+// the browser session. Used as a fallback when Chrome's navigation aborts
+// (e.g. for .gz files or other binary downloads).
+func (h *Handlers) fetchDirectWithCookies(ctx context.Context, browserCtx context.Context, dlURL string, maxBytes int) (body []byte, contentType string, statusCode int, err error) {
+	parsed, err := url.Parse(dlURL)
+	if err != nil {
+		return nil, "", 0, fmt.Errorf("parse URL: %w", err)
+	}
+
+	// Pull cookies from the browser for this URL.
+	var browserCookies []*network.Cookie
+	if fetchErr := chromedp.Run(browserCtx,
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			var err error
+			browserCookies, err = network.GetCookies().WithURLs([]string{dlURL}).Do(ctx)
+			return err
+		}),
+	); fetchErr != nil {
+		slog.Debug("download fallback: failed to get browser cookies", "err", fetchErr)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "GET", dlURL, nil)
+	if err != nil {
+		return nil, "", 0, err
+	}
+	if h.Config.UserAgent != "" {
+		req.Header.Set("User-Agent", h.Config.UserAgent)
+	}
+	req.Header.Set("Accept", "*/*")
+	for _, c := range browserCookies {
+		if domainMatchesCookie(c.Domain, parsed.Host) {
+			req.AddCookie(&http.Cookie{Name: c.Name, Value: c.Value})
+		}
+	}
+
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 10 {
+				return fmt.Errorf("too many redirects")
+			}
+			host := req.URL.Hostname()
+			if netguard.IsLocalHost(host) {
+				return fmt.Errorf("redirect to local network blocked: %s", host)
+			}
+			if _, err := netguard.ResolveAndValidatePublicIPs(req.Context(), host); err != nil {
+				return fmt.Errorf("redirect to private network blocked: %s", host)
+			}
+			return nil
+		},
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, "", 0, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	reader := io.Reader(resp.Body)
+
+	// Decompress gzip if the content itself is gzip-encoded (e.g. .gz files)
+	// but NOT if the transport encoding is gzip (Go handles that automatically).
+	if isGzipContent(resp.Header.Get("Content-Type"), dlURL) &&
+		!strings.EqualFold(resp.Header.Get("Content-Encoding"), "gzip") {
+		gz, gzErr := gzip.NewReader(resp.Body)
+		if gzErr != nil {
+			return nil, "", 0, fmt.Errorf("gzip decompress: %w", gzErr)
+		}
+		defer func() { _ = gz.Close() }()
+		reader = gz
+	}
+
+	data, err := io.ReadAll(io.LimitReader(reader, int64(maxBytes)+1))
+	if err != nil {
+		return nil, "", 0, err
+	}
+	if len(data) > maxBytes {
+		return nil, "", 0, errDownloadTooLarge
+	}
+
+	ct := resp.Header.Get("Content-Type")
+	if ct == "" {
+		ct = "application/octet-stream"
+	}
+	// If we decompressed gzip, report the inner content type
+	if isGzipContent(ct, dlURL) {
+		ct = inferDecompressedContentType(dlURL, ct)
+	}
+
+	return data, ct, resp.StatusCode, nil
+}
+
+func domainMatchesCookie(cookieDomain, host string) bool {
+	cookieDomain = strings.TrimPrefix(cookieDomain, ".")
+	return strings.EqualFold(host, cookieDomain) ||
+		strings.HasSuffix(host, "."+cookieDomain)
+}
+
+func isGzipContent(contentType, rawURL string) bool {
+	if strings.Contains(strings.ToLower(contentType), "gzip") {
+		return true
+	}
+	return strings.HasSuffix(strings.ToLower(rawURL), ".gz")
+}
+
+func inferDecompressedContentType(rawURL, fallback string) string {
+	lower := strings.ToLower(rawURL)
+	// Strip .gz to infer inner type
+	if strings.HasSuffix(lower, ".xml.gz") {
+		return "application/xml"
+	}
+	if strings.HasSuffix(lower, ".json.gz") {
+		return "application/json"
+	}
+	if strings.HasSuffix(lower, ".txt.gz") || strings.HasSuffix(lower, ".csv.gz") {
+		return "text/plain"
+	}
+	return "application/octet-stream"
+}
+
+func isNavigationAborted(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "net::ERR_ABORTED")
 }
 
 // HandleTabDownload fetches a URL using the browser session for a tab identified by path ID.
