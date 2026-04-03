@@ -66,14 +66,14 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 	h.recordReadRequest(r, "snapshot", tabID)
 	if h.useLite(engine.CapSnapshot, "") {
 		h.recordEngine(r, "lite")
-		nodes, err := h.Router.Lite().Snapshot(r.Context(), tabID, filter)
+		result, err := h.Router.Lite().Snapshot(r.Context(), tabID, filter)
 		if err != nil {
 			httpx.Error(w, 500, fmt.Errorf("lite snapshot: %w", err))
 			return
 		}
 		// Convert to bridge.A11yNode for API compatibility.
-		flat := make([]bridge.A11yNode, len(nodes))
-		for i, n := range nodes {
+		flat := make([]bridge.A11yNode, len(result.Nodes))
+		for i, n := range result.Nodes {
 			flat[i] = bridge.A11yNode{Ref: n.Ref, Role: n.Role, Name: n.Name, Depth: n.Depth, Value: n.Value}
 		}
 		w.Header().Set("X-Engine", "lite")
