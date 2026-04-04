@@ -65,6 +65,7 @@ func StorageSet(client *http.Client, base, token string, cmd *cobra.Command, key
 }
 
 // StorageDelete removes a storage item, clears a store, or clears both (--all).
+// It calls DELETE /storage so the server-side delete/clear handler is used.
 func StorageDelete(client *http.Client, base, token string, cmd *cobra.Command) {
 	storageType, _ := cmd.Flags().GetString("type")
 	key, _ := cmd.Flags().GetString("key")
@@ -88,7 +89,7 @@ func StorageDelete(client *http.Client, base, token string, cmd *cobra.Command) 
 		body["tabId"] = tabID
 	}
 
-	result := apiclient.DoPost(client, base, token, "/storage", body)
+	result := apiclient.DoDeleteJSON(client, base, token, "/storage", body)
 	if result == nil {
 		fmt.Fprintln(os.Stderr, "Failed to delete storage")
 		os.Exit(1)
